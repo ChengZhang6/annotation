@@ -441,6 +441,7 @@
 
     let accessToken = "";
     let tokenClient = null;
+    let authRequestMode = "manual";
 
     const els = {};
     [
@@ -486,6 +487,7 @@
       els["load-roster"].addEventListener("click", loadRosterRows);
       els["annotation-form"].addEventListener("submit", appendAnnotation);
       els["clear-form"].addEventListener("click", () => els["annotation-form"].reset());
+      window.setTimeout(trySilentSignIn, 600);
     }
 
     function loadConfig() {
@@ -514,32 +516,69 @@
 
     function signIn() {
       saveConfig();
+      requestGoogleToken("manual");
+    }
+
+    function requestGoogleToken(mode) {
       const config = currentConfig();
       if (!config.clientId) {
-        showMessage("OAuth client ID is required before Google sign-in.", "error");
+        if (mode === "manual") {
+          showMessage("OAuth client ID is required before Google sign-in.", "error");
+        }
         return;
       }
       if (!window.google || !google.accounts || !google.accounts.oauth2) {
-        showMessage("Google Identity Services did not load. Open this page from GitHub Pages or localhost.", "error");
+        if (mode === "manual") {
+          showMessage("Google Identity Services did not load. Open this page from GitHub Pages or localhost.", "error");
+        }
         return;
       }
+      authRequestMode = mode;
       if (!tokenClient) {
         tokenClient = google.accounts.oauth2.initTokenClient({
           client_id: config.clientId,
           scope: SCOPE,
           callback: (response) => {
             if (response.error) {
-              showMessage(response.error, "error");
+              if (authRequestMode === "manual") {
+                showMessage(response.error, "error");
+              } else {
+                els.status.textContent = "Not connected";
+                els.status.className = "status";
+                showMessage("Sign in when you are ready to connect Google Sheets.", "warn");
+              }
               return;
             }
             accessToken = response.access_token;
             els.status.textContent = "Connected";
             els.status.className = "status ok";
-            showMessage("Signed in. Google will use this user's permission to write the sheet.", "ok");
+            const message = authRequestMode === "silent"
+              ? "Google sign-in restored. You can read and write the shared sheet."
+              : "Signed in. Google will use this user's permission to write the sheet.";
+            showMessage(message, "ok");
           }
         });
       }
-      tokenClient.requestAccessToken({ prompt: accessToken ? "" : "consent" });
+      const prompt = mode === "silent" || accessToken ? "" : "consent";
+      tokenClient.requestAccessToken({ prompt });
+    }
+
+    function trySilentSignIn() {
+      const startedAt = Date.now();
+      const timer = window.setInterval(() => {
+        if (accessToken) {
+          window.clearInterval(timer);
+          return;
+        }
+        if (window.google && google.accounts && google.accounts.oauth2) {
+          window.clearInterval(timer);
+          requestGoogleToken("silent");
+          return;
+        }
+        if (Date.now() - startedAt > 5000) {
+          window.clearInterval(timer);
+        }
+      }, 250);
     }
 
     async function prepareTab() {
