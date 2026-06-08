@@ -270,6 +270,19 @@
       overflow: auto;
     }
 
+    .roster-row {
+      cursor: pointer;
+    }
+
+    .roster-row:hover {
+      background: var(--green-soft);
+    }
+
+    .link-cell {
+      max-width: 360px;
+      overflow-wrap: anywhere;
+    }
+
     @media (max-width: 860px) {
       .topbar,
       .shell {
@@ -325,9 +338,14 @@
           Write tab
           <input id="tab-name" autocomplete="off">
         </label>
+        <label>
+          Roster tab
+          <input id="roster-tab-name" autocomplete="off">
+        </label>
         <div class="toolbar">
           <button id="prepare-tab" type="button">Prepare tab</button>
           <button id="load-recent" type="button">Load recent</button>
+          <button id="load-roster" type="button">Load roster</button>
         </div>
         <div id="message" class="message">Add the OAuth client ID, then sign in. The spreadsheet ID is already filled from your link.</div>
       </div>
@@ -378,6 +396,22 @@
     </section>
 
     <section class="panel" style="grid-column: 1 / -1;">
+      <h2>Article Roster</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Article ID</th>
+              <th>Article Title</th>
+              <th>Link to article</th>
+            </tr>
+          </thead>
+          <tbody id="roster-rows"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel" style="grid-column: 1 / -1;">
       <h2>Recent Rows</h2>
       <div class="table-wrap">
         <table>
@@ -416,8 +450,10 @@
       "client-id",
       "spreadsheet-id",
       "tab-name",
+      "roster-tab-name",
       "prepare-tab",
       "load-recent",
+      "load-roster",
       "message",
       "annotation-form",
       "article-link",
@@ -428,6 +464,7 @@
       "notes",
       "starred",
       "clear-form",
+      "roster-rows",
       "recent-rows"
     ].forEach((id) => {
       els[id] = document.getElementById(id);
@@ -440,11 +477,13 @@
       els["client-id"].value = config.clientId || OAUTH_CLIENT_ID;
       els["spreadsheet-id"].value = config.spreadsheetId || SPREADSHEET_ID;
       els["tab-name"].value = config.tabName || "Annotations";
+      els["roster-tab-name"].value = config.rosterTabName || "article_roster";
 
       els["save-config"].addEventListener("click", saveConfig);
       els["sign-in"].addEventListener("click", signIn);
       els["prepare-tab"].addEventListener("click", prepareTab);
       els["load-recent"].addEventListener("click", loadRecentRows);
+      els["load-roster"].addEventListener("click", loadRosterRows);
       els["annotation-form"].addEventListener("submit", appendAnnotation);
       els["clear-form"].addEventListener("click", () => els["annotation-form"].reset());
     }
@@ -468,7 +507,8 @@
       return {
         clientId: els["client-id"].value.trim(),
         spreadsheetId: els["spreadsheet-id"].value.trim() || SPREADSHEET_ID,
-        tabName: els["tab-name"].value.trim() || "Annotations"
+        tabName: els["tab-name"].value.trim() || "Annotations",
+        rosterTabName: els["roster-tab-name"].value.trim() || "article_roster"
       };
     }
 
@@ -560,6 +600,20 @@
       }
     }
 
+    async function loadRosterRows() {
+      try {
+        requireToken();
+        const config = currentConfig();
+        const data = await sheetsFetch(`/values/${encodeURIComponent(`${quoteSheet(config.rosterTabName)}!A1:Z500`)}`);
+        const rows = data.values || [];
+        const roster = parseRosterRows(rows);
+        renderRosterRows(roster);
+        showMessage(`Loaded ${roster.length} article roster row(s).`, "ok");
+      } catch (error) {
+        showMessage(error.message, "error");
+      }
+    }
+
     async function sheetsFetch(path, options = {}) {
       const config = currentConfig();
       const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${config.spreadsheetId}${path}`, {
@@ -607,6 +661,41 @@
       `).join("");
     }
 
+    function parseRosterRows(rows) {
+      if (!rows.length) {
+        return [];
+      }
+      const headers = rows[0].map(normalizeHeader);
+      const idIndex = findHeaderIndex(headers, ["articleid", "article_id", "id"]);
+      const titleIndex = findHeaderIndex(headers, ["article_title", "title", "articletitle"]);
+      const linkIndex = findHeaderIndex(headers, ["link_to_article", "article_link", "link", "url"]);
+
+      return rows.slice(1)
+        .filter((row) => row.some((cell) => String(cell || "").trim()))
+        .map((row) => ({
+          id: row[idIndex] || "",
+          title: row[titleIndex] || "",
+          link: row[linkIndex] || ""
+        }));
+    }
+
+    function renderRosterRows(rows) {
+      els["roster-rows"].innerHTML = rows.map((row) => `
+        <tr class="roster-row" data-link="${escapeHtml(row.link)}" data-title="${escapeHtml(row.title)}">
+          <td>${escapeHtml(row.id)}</td>
+          <td>${escapeHtml(row.title)}</td>
+          <td class="link-cell">${row.link ? `<a href="${escapeHtml(row.link)}" target="_blank" rel="noreferrer">${escapeHtml(row.link)}</a>` : ""}</td>
+        </tr>
+      `).join("");
+
+      els["roster-rows"].querySelectorAll(".roster-row").forEach((row) => {
+        row.addEventListener("click", () => {
+          els["article-link"].value = row.dataset.link || "";
+          showMessage(`Selected article: ${row.dataset.title || row.dataset.link || "untitled"}`, "ok");
+        });
+      });
+    }
+
     function requireToken() {
       if (!accessToken) {
         throw new Error("Sign in with Google first.");
@@ -624,6 +713,24 @@
 
     function quoteSheet(name) {
       return `'${String(name).replace(/'/g, "''")}'`;
+    }
+
+    function normalizeHeader(value) {
+      return String(value || "")
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "_")
+        .replace(/^_+|_+$/g, "");
+    }
+
+    function findHeaderIndex(headers, candidates) {
+      for (const candidate of candidates) {
+        const index = headers.indexOf(candidate);
+        if (index !== -1) {
+          return index;
+        }
+      }
+      return -1;
     }
 
     function escapeHtml(value) {
