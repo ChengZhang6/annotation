@@ -166,7 +166,8 @@
     }
 
     .shell {
-      max-width: 1180px;
+      width: 100%;
+      max-width: none;
       margin: 0 auto;
       padding: 18px;
       display: grid;
@@ -278,6 +279,11 @@
       background: var(--green-soft);
     }
 
+    .roster-row.active {
+      background: var(--green-soft);
+      box-shadow: inset 4px 0 0 var(--green);
+    }
+
     .link-cell {
       max-width: 360px;
       overflow-wrap: anywhere;
@@ -285,7 +291,7 @@
 
     .viewer-grid {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(360px, 0.85fr);
+      grid-template-columns: minmax(0, 1fr) minmax(420px, 1fr);
       gap: 12px;
       padding: 14px;
     }
@@ -582,6 +588,7 @@
       els["load-form"].addEventListener("click", loadFormFrame);
       els["annotation-form"].addEventListener("submit", appendAnnotation);
       els["clear-form"].addEventListener("click", () => els["annotation-form"].reset());
+      showArticlePlaceholder();
       loadFormFrame();
       window.setTimeout(trySilentSignIn, 600);
     }
@@ -744,6 +751,9 @@
         const rows = data.values || [];
         const roster = parseRosterRows(rows);
         renderRosterRows(roster);
+        if (roster.length) {
+          loadArticleFrame(roster[0].link, roster[0].title, 0);
+        }
         showMessage(`Loaded ${roster.length} article roster row(s).`, "ok");
       } catch (error) {
         showMessage(error.message, "error");
@@ -816,8 +826,8 @@
     }
 
     function renderRosterRows(rows) {
-      els["roster-rows"].innerHTML = rows.map((row) => `
-        <tr class="roster-row" data-link="${escapeHtml(row.link)}" data-title="${escapeHtml(row.title)}">
+      els["roster-rows"].innerHTML = rows.map((row, index) => `
+        <tr class="roster-row" data-index="${index}" data-link="${escapeHtml(row.link)}" data-title="${escapeHtml(row.title)}">
           <td>${escapeHtml(row.id)}</td>
           <td>${escapeHtml(row.title)}</td>
           <td class="link-cell">${row.link ? `<a href="${escapeHtml(row.link)}" target="_blank" rel="noreferrer">${escapeHtml(row.link)}</a>` : ""}</td>
@@ -826,21 +836,49 @@
 
       els["roster-rows"].querySelectorAll(".roster-row").forEach((row) => {
         row.addEventListener("click", () => {
-          loadArticleFrame(row.dataset.link || "", row.dataset.title || "");
+          loadArticleFrame(row.dataset.link || "", row.dataset.title || "", Number(row.dataset.index), true);
         });
       });
     }
 
-    function loadArticleFrame(link, title) {
+    function loadArticleFrame(link, title, index, openExternal = false) {
       if (!link) {
         showMessage("This roster row has no article link.", "warn");
         return;
       }
+      els["article-frame"].removeAttribute("srcdoc");
       els["article-link"].value = link;
       els["article-frame-title"].textContent = title || link;
       els["article-open-link"].href = link;
       els["article-frame"].src = link;
-      showMessage(`Selected article: ${title || link}`, "ok");
+      highlightRosterRow(index);
+      if (openExternal) {
+        window.open(link, "cdcf_article_window", "noopener");
+      }
+      showMessage(`Selected article: ${title || link}. If the embedded page is blocked, use the article window or Open article.`, "ok");
+    }
+
+    function showArticlePlaceholder() {
+      els["article-frame"].src = "about:blank";
+      els["article-frame"].srcdoc = `
+        <!doctype html>
+        <html>
+          <body style="margin:0;font:14px system-ui,sans-serif;color:#66717d;background:#fff;">
+            <div style="height:100vh;display:grid;place-items:center;text-align:center;padding:24px;">
+              <div>
+                <strong style="display:block;color:#202327;margin-bottom:8px;">No article selected</strong>
+                Sign in, click Load roster, then choose an article row.
+              </div>
+            </div>
+          </body>
+        </html>
+      `;
+    }
+
+    function highlightRosterRow(index) {
+      els["roster-rows"].querySelectorAll(".roster-row").forEach((row) => {
+        row.classList.toggle("active", Number(row.dataset.index) === index);
+      });
     }
 
     function loadFormFrame() {
