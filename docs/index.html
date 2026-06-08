@@ -399,6 +399,7 @@
   </main>
 
   <script>
+    const OAUTH_CLIENT_ID = "851780710057-jilmd0lqqm402i2gsnpf9o5t3plf1vkr.apps.googleusercontent.com";
     const SPREADSHEET_ID = "1gNt24it0OKAaxJJb-pyXDtpd0PmfT3H1irdJUk-lPEk";
     const STORAGE_KEY = "cdcf-simple-config";
     const SCOPE = "https://www.googleapis.com/auth/spreadsheets";
@@ -436,7 +437,7 @@
 
     function init() {
       const config = loadConfig();
-      els["client-id"].value = config.clientId || "";
+      els["client-id"].value = config.clientId || OAUTH_CLIENT_ID;
       els["spreadsheet-id"].value = config.spreadsheetId || SPREADSHEET_ID;
       els["tab-name"].value = config.tabName || "Annotations";
 
