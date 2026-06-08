@@ -283,6 +283,58 @@
       overflow-wrap: anywhere;
     }
 
+    .viewer-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(360px, 0.85fr);
+      gap: 12px;
+      padding: 14px;
+    }
+
+    .viewer-pane {
+      min-width: 0;
+      display: grid;
+      grid-template-rows: auto minmax(520px, 68vh);
+      gap: 8px;
+    }
+
+    .viewer-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      min-height: 38px;
+    }
+
+    .viewer-title {
+      min-width: 0;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 750;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .viewer-toolbar a {
+      color: var(--green);
+      font-size: 13px;
+      font-weight: 750;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .viewer-toolbar a:hover {
+      text-decoration: underline;
+    }
+
+    iframe {
+      width: 100%;
+      height: 100%;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #ffffff;
+    }
+
     @media (max-width: 860px) {
       .topbar,
       .shell {
@@ -305,6 +357,14 @@
 
       .grid-two {
         grid-template-columns: 1fr;
+      }
+
+      .viewer-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .viewer-pane {
+        grid-template-rows: auto 520px;
       }
     }
   </style>
@@ -342,10 +402,15 @@
           Roster tab
           <input id="roster-tab-name" autocomplete="off">
         </label>
+        <label>
+          Google Form URL
+          <input id="form-url" autocomplete="off">
+        </label>
         <div class="toolbar">
           <button id="prepare-tab" type="button">Prepare tab</button>
           <button id="load-recent" type="button">Load recent</button>
           <button id="load-roster" type="button">Load roster</button>
+          <button id="load-form" type="button">Load form</button>
         </div>
         <div id="message" class="message">Add the OAuth client ID, then sign in. The spreadsheet ID is already filled from your link.</div>
       </div>
@@ -396,6 +461,26 @@
     </section>
 
     <section class="panel" style="grid-column: 1 / -1;">
+      <h2>Article + Annotation Form</h2>
+      <div class="viewer-grid">
+        <div class="viewer-pane">
+          <div class="viewer-toolbar">
+            <div id="article-frame-title" class="viewer-title">Select an article from the roster</div>
+            <a id="article-open-link" href="#" target="_blank" rel="noreferrer">Open article</a>
+          </div>
+          <iframe id="article-frame" title="Article viewer"></iframe>
+        </div>
+        <div class="viewer-pane">
+          <div class="viewer-toolbar">
+            <div class="viewer-title">Google Form</div>
+            <a id="form-open-link" href="#" target="_blank" rel="noreferrer">Open form</a>
+          </div>
+          <iframe id="form-frame" title="Google annotation form"></iframe>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" style="grid-column: 1 / -1;">
       <h2>Article Roster</h2>
       <div class="table-wrap">
         <table>
@@ -435,6 +520,7 @@
   <script>
     const OAUTH_CLIENT_ID = "851780710057-jilmd0lqqm402i2gsnpf9o5t3plf1vkr.apps.googleusercontent.com";
     const SPREADSHEET_ID = "1gNt24it0OKAaxJJb-pyXDtpd0PmfT3H1irdJUk-lPEk";
+    const FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSdqQa1bmu-sLxzmfuK5-e0Jf83uIIXLZJPaWsngEUJ6alXTqw/viewform?usp=header";
     const STORAGE_KEY = "cdcf-simple-config";
     const SCOPE = "https://www.googleapis.com/auth/spreadsheets";
     const HEADERS = ["timestamp", "article_link", "clean_text", "question", "answer", "evidence", "notes", "starred", "user_note"];
@@ -452,9 +538,11 @@
       "spreadsheet-id",
       "tab-name",
       "roster-tab-name",
+      "form-url",
       "prepare-tab",
       "load-recent",
       "load-roster",
+      "load-form",
       "message",
       "annotation-form",
       "article-link",
@@ -465,6 +553,11 @@
       "notes",
       "starred",
       "clear-form",
+      "article-frame-title",
+      "article-open-link",
+      "article-frame",
+      "form-open-link",
+      "form-frame",
       "roster-rows",
       "recent-rows"
     ].forEach((id) => {
@@ -479,14 +572,17 @@
       els["spreadsheet-id"].value = config.spreadsheetId || SPREADSHEET_ID;
       els["tab-name"].value = config.tabName || "Annotations";
       els["roster-tab-name"].value = config.rosterTabName || "article_roster";
+      els["form-url"].value = config.formUrl || FORM_URL;
 
       els["save-config"].addEventListener("click", saveConfig);
       els["sign-in"].addEventListener("click", signIn);
       els["prepare-tab"].addEventListener("click", prepareTab);
       els["load-recent"].addEventListener("click", loadRecentRows);
       els["load-roster"].addEventListener("click", loadRosterRows);
+      els["load-form"].addEventListener("click", loadFormFrame);
       els["annotation-form"].addEventListener("submit", appendAnnotation);
       els["clear-form"].addEventListener("click", () => els["annotation-form"].reset());
+      loadFormFrame();
       window.setTimeout(trySilentSignIn, 600);
     }
 
@@ -510,7 +606,8 @@
         clientId: els["client-id"].value.trim(),
         spreadsheetId: els["spreadsheet-id"].value.trim() || SPREADSHEET_ID,
         tabName: els["tab-name"].value.trim() || "Annotations",
-        rosterTabName: els["roster-tab-name"].value.trim() || "article_roster"
+        rosterTabName: els["roster-tab-name"].value.trim() || "article_roster",
+        formUrl: els["form-url"].value.trim() || FORM_URL
       };
     }
 
@@ -729,10 +826,28 @@
 
       els["roster-rows"].querySelectorAll(".roster-row").forEach((row) => {
         row.addEventListener("click", () => {
-          els["article-link"].value = row.dataset.link || "";
-          showMessage(`Selected article: ${row.dataset.title || row.dataset.link || "untitled"}`, "ok");
+          loadArticleFrame(row.dataset.link || "", row.dataset.title || "");
         });
       });
+    }
+
+    function loadArticleFrame(link, title) {
+      if (!link) {
+        showMessage("This roster row has no article link.", "warn");
+        return;
+      }
+      els["article-link"].value = link;
+      els["article-frame-title"].textContent = title || link;
+      els["article-open-link"].href = link;
+      els["article-frame"].src = link;
+      showMessage(`Selected article: ${title || link}`, "ok");
+    }
+
+    function loadFormFrame() {
+      const config = currentConfig();
+      const formUrl = normalizeFormUrl(config.formUrl);
+      els["form-open-link"].href = config.formUrl;
+      els["form-frame"].src = formUrl;
     }
 
     function requireToken() {
@@ -770,6 +885,18 @@
         }
       }
       return -1;
+    }
+
+    function normalizeFormUrl(url) {
+      try {
+        const parsed = new URL(url);
+        if (parsed.hostname === "docs.google.com" && parsed.pathname.includes("/forms/")) {
+          parsed.searchParams.set("embedded", "true");
+        }
+        return parsed.toString();
+      } catch {
+        return url;
+      }
     }
 
     function escapeHtml(value) {
