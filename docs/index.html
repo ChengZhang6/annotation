@@ -186,6 +186,12 @@
       place-items: center;
     }
 
+    .nav-icon {
+      font-size: 17px;
+      font-weight: 800;
+      line-height: 1;
+    }
+
     .google-mark {
       font-family: Arial, sans-serif;
       font-size: 16px;
@@ -387,10 +393,37 @@
     }
 
     .viewer-grid {
+      --left-pane: 50%;
       height: 100%;
       display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(420px, 1fr);
-      gap: 10px;
+      grid-template-columns: minmax(260px, var(--left-pane)) 6px minmax(360px, 1fr);
+      gap: 0;
+    }
+
+    .pane-divider {
+      width: 6px;
+      min-width: 6px;
+      cursor: col-resize;
+      border: 0;
+      background: transparent;
+      position: relative;
+      z-index: 6;
+    }
+
+    .pane-divider::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 2px;
+      width: 2px;
+      border-radius: 999px;
+      background: transparent;
+    }
+
+    .pane-divider:hover::before,
+    .pane-divider.dragging::before {
+      background: var(--green);
     }
 
     .viewer-pane {
@@ -422,6 +455,20 @@
 
     .viewer-toolbar.compact > * {
       pointer-events: auto;
+    }
+
+    .article-toolbar {
+      top: auto;
+      right: auto;
+      bottom: 8px;
+      left: 8px;
+      width: min(720px, calc(100% - 118px));
+      padding: 5px 7px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.76);
+      box-shadow: 0 4px 12px rgba(32, 35, 39, 0.12);
+      backdrop-filter: blur(8px);
     }
 
     .article-meta {
@@ -651,7 +698,9 @@
       <input id="spreadsheet-id" class="hidden" autocomplete="off">
       <input id="roster-tab-name" class="hidden" autocomplete="off">
       <input id="form-url" class="hidden" autocomplete="off">
-      <button id="load-roster" type="button">Load roster</button>
+      <button id="load-roster" class="icon-button" type="button" aria-label="Load roster" title="Load roster">
+        <span class="nav-icon" aria-hidden="true">&#8635;</span>
+      </button>
       <label class="control-field">
         <span class="visually-hidden">Article</span>
         <select id="article-select"></select>
@@ -660,9 +709,15 @@
         <span class="visually-hidden">articleID</span>
         <input id="jump-id" autocomplete="off" placeholder="A050">
       </label>
-      <button id="nav-prev" type="button">Prev</button>
-      <button id="nav-next" type="button">Next</button>
-      <button id="jump-go" class="primary" type="button">Go</button>
+      <button id="nav-prev" class="icon-button" type="button" aria-label="Previous article" title="Previous article">
+        <span class="nav-icon" aria-hidden="true">&lsaquo;</span>
+      </button>
+      <button id="nav-next" class="icon-button" type="button" aria-label="Next article" title="Next article">
+        <span class="nav-icon" aria-hidden="true">&rsaquo;</span>
+      </button>
+      <button id="jump-go" class="primary icon-button" type="button" aria-label="Go to articleID" title="Go to articleID">
+        <span class="nav-icon" aria-hidden="true">&crarr;</span>
+      </button>
       <div id="article-position" class="subtle">No roster loaded</div>
     </div>
     <div class="actions">
@@ -677,7 +732,7 @@
     <section class="workspace">
       <div class="viewer-grid">
         <div class="viewer-pane">
-          <div class="viewer-toolbar">
+          <div class="viewer-toolbar article-toolbar">
             <div class="article-meta">
               <div id="article-frame-title" class="viewer-title">Select an article from the roster</div>
               <div id="article-frame-link" class="viewer-title article-url"></div>
@@ -696,6 +751,7 @@
             </div>
           </div>
         </div>
+        <button id="pane-divider" class="pane-divider" type="button" aria-label="Resize panes" title="Drag to resize panes"></button>
         <div class="viewer-pane">
           <div class="viewer-toolbar compact">
             <div class="pane-tabs" role="tablist" aria-label="Right pane">
@@ -740,6 +796,7 @@
     const EDITOR_CACHE_KEY = "cdcf-editor-cache";
     const RIGHT_TAB_KEY = "cdcf-right-tab";
     const ZOOM_CACHE_KEY = "cdcf-pane-zoom";
+    const SPLIT_CACHE_KEY = "cdcf-pane-split";
     const SCOPE = "https://www.googleapis.com/auth/spreadsheets";
     let accessToken = "";
     let tokenClient = null;
@@ -774,6 +831,7 @@
       "article-zoom-out",
       "article-zoom-reset",
       "article-zoom-in",
+      "pane-divider",
       "tab-form",
       "tab-editor",
       "form-open-link",
@@ -824,7 +882,10 @@
       els["right-zoom-out"].addEventListener("click", () => changePaneZoom("right", -0.1));
       els["right-zoom-in"].addEventListener("click", () => changePaneZoom("right", 0.1));
       els["right-zoom-reset"].addEventListener("click", () => setPaneZoom("right", 1));
+      els["pane-divider"].addEventListener("pointerdown", startPaneResize);
+      els["pane-divider"].addEventListener("dblclick", () => setPaneSplit(50));
       restorePaneZoom();
+      restorePaneSplit();
       showArticlePlaceholder();
       loadFormFrame();
       setRightTab(localStorage.getItem(RIGHT_TAB_KEY) === "editor" ? "editor" : "form");
@@ -1216,6 +1277,38 @@
         return fallback;
       }
       return Math.max(0.6, Math.min(1.8, Math.round(numeric * 10) / 10));
+    }
+
+    function restorePaneSplit() {
+      const cached = Number(localStorage.getItem(SPLIT_CACHE_KEY));
+      setPaneSplit(Number.isFinite(cached) ? cached : 50, false);
+    }
+
+    function setPaneSplit(percent, persist = true) {
+      const bounded = Math.max(30, Math.min(70, Math.round(percent * 10) / 10));
+      document.querySelector(".viewer-grid").style.setProperty("--left-pane", `${bounded}%`);
+      if (persist) {
+        localStorage.setItem(SPLIT_CACHE_KEY, String(bounded));
+      }
+    }
+
+    function startPaneResize(event) {
+      event.preventDefault();
+      els["pane-divider"].classList.add("dragging");
+      const grid = document.querySelector(".viewer-grid");
+      const update = (moveEvent) => {
+        const rect = grid.getBoundingClientRect();
+        const percent = ((moveEvent.clientX - rect.left) / rect.width) * 100;
+        setPaneSplit(percent);
+      };
+      const stop = () => {
+        els["pane-divider"].classList.remove("dragging");
+        window.removeEventListener("pointermove", update);
+        window.removeEventListener("pointerup", stop);
+      };
+      window.addEventListener("pointermove", update);
+      window.addEventListener("pointerup", stop);
+      update(event);
     }
 
     function showArticlePlaceholder() {
