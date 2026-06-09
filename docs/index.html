@@ -154,7 +154,7 @@
       flex: 1 1 auto;
       min-width: 0;
       display: grid;
-      grid-template-columns: auto minmax(260px, 560px) 78px auto auto auto auto;
+      grid-template-columns: auto auto minmax(260px, 560px) auto 78px auto auto;
       align-items: center;
       gap: 5px;
     }
@@ -730,20 +730,20 @@
       <button id="load-roster" class="icon-button" type="button" aria-label="Load roster" title="Load roster">
         <span class="nav-icon" aria-hidden="true">&#8635;</span>
       </button>
+      <button id="nav-prev" class="icon-button" type="button" aria-label="Previous article" title="Previous article">
+        <span class="nav-icon" aria-hidden="true">&lsaquo;</span>
+      </button>
       <label class="control-field">
         <span class="visually-hidden">Article</span>
         <select id="article-select"></select>
       </label>
+      <button id="nav-next" class="icon-button" type="button" aria-label="Next article" title="Next article">
+        <span class="nav-icon" aria-hidden="true">&rsaquo;</span>
+      </button>
       <label class="control-field">
         <span class="visually-hidden">articleID</span>
         <input id="jump-id" autocomplete="off" placeholder="A050">
       </label>
-      <button id="nav-prev" class="icon-button" type="button" aria-label="Previous article" title="Previous article">
-        <span class="nav-icon" aria-hidden="true">&lsaquo;</span>
-      </button>
-      <button id="nav-next" class="icon-button" type="button" aria-label="Next article" title="Next article">
-        <span class="nav-icon" aria-hidden="true">&rsaquo;</span>
-      </button>
       <button id="jump-go" class="primary icon-button" type="button" aria-label="Go to articleID" title="Go to articleID">
         <span class="nav-icon" aria-hidden="true">&crarr;</span>
       </button>
@@ -1016,13 +1016,22 @@
       try {
         requireToken();
         const config = currentConfig();
+        const previousArticle = currentArticle();
+        const previousId = normalizeArticleId(previousArticle && previousArticle.id ? previousArticle.id : els["jump-id"].value);
+        const previousIndex = currentRosterIndex;
         const data = await sheetsFetch(`/values/${encodeURIComponent(`${quoteSheet(config.rosterTabName)}!A1:Z500`)}`);
         const rows = data.values || [];
         rosterRows = parseRosterRows(rows);
         currentRosterIndex = -1;
         renderRosterOptions();
         if (rosterRows.length) {
-          selectArticleByIndex(0, false);
+          const idIndex = previousId
+            ? rosterRows.findIndex((row) => normalizeArticleId(row.id) === previousId)
+            : -1;
+          const fallbackIndex = previousIndex >= 0
+            ? Math.min(previousIndex, rosterRows.length - 1)
+            : 0;
+          selectArticleByIndex(idIndex >= 0 ? idIndex : fallbackIndex, false);
         }
         saveRosterCache();
         showMessage(`Loaded ${rosterRows.length} article roster row(s).`, "ok");
