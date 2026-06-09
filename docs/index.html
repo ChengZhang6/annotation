@@ -440,6 +440,7 @@
 
     .viewer-title {
       min-width: 0;
+      max-width: min(48vw, 760px);
       color: var(--muted);
       font-size: 12px;
       font-weight: 750;
@@ -448,7 +449,15 @@
       white-space: nowrap;
     }
 
-    .viewer-toolbar a {
+    .viewer-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 0 0 auto;
+    }
+
+    .viewer-toolbar a,
+    .link-button {
       color: var(--green);
       font-size: 13px;
       font-weight: 750;
@@ -456,7 +465,15 @@
       white-space: nowrap;
     }
 
-    .viewer-toolbar a:hover {
+    .link-button {
+      min-height: 0;
+      border: 0;
+      background: transparent;
+      padding: 0;
+    }
+
+    .viewer-toolbar a:hover,
+    .link-button:hover {
       text-decoration: underline;
     }
 
@@ -626,7 +643,10 @@
         <div class="viewer-pane">
           <div class="viewer-toolbar">
             <div id="article-frame-title" class="viewer-title">Select an article from the roster</div>
-            <a id="article-open-link" href="#" target="_blank" rel="noreferrer">Open article</a>
+            <div class="viewer-actions">
+              <button id="article-refresh" class="link-button" type="button">Refresh article</button>
+              <a id="article-open-link" href="#" target="_blank" rel="noreferrer">Open article</a>
+            </div>
           </div>
           <div id="article-frame-wrap" class="zoom-box">
             <iframe id="article-frame" class="tab-panel" title="Article viewer"></iframe>
@@ -705,6 +725,7 @@
       "article-position",
       "message",
       "article-frame-title",
+      "article-refresh",
       "article-open-link",
       "article-frame-wrap",
       "article-frame",
@@ -749,6 +770,7 @@
       });
       els["nav-prev"].addEventListener("click", () => moveArticle(-1));
       els["nav-next"].addEventListener("click", () => moveArticle(1));
+      els["article-refresh"].addEventListener("click", refreshArticleFrame);
       els["tab-form"].addEventListener("click", () => setRightTab("form"));
       els["tab-editor"].addEventListener("click", () => setRightTab("editor"));
       els["clean-text-editor"].addEventListener("input", saveCurrentEditorDraft);
@@ -981,6 +1003,17 @@
         window.open(link, "cdcf_article_window", "noopener");
       }
       showMessage(`Selected: ${articleId || title || link}`, "ok");
+    }
+
+    function refreshArticleFrame() {
+      const article = currentArticle();
+      if (!article || !article.link) {
+        showMessage("No article selected.", "warn");
+        return;
+      }
+      els["article-frame"].removeAttribute("srcdoc");
+      els["article-frame"].src = withCacheBust(article.link);
+      showMessage(`Refreshing: ${article.id || article.title || "article"}`, "ok");
     }
 
     function restoreRosterCache() {
@@ -1221,6 +1254,16 @@
         if (parsed.hostname === "docs.google.com" && parsed.pathname.includes("/forms/")) {
           parsed.searchParams.set("embedded", "true");
         }
+        return parsed.toString();
+      } catch {
+        return url;
+      }
+    }
+
+    function withCacheBust(url) {
+      try {
+        const parsed = new URL(url);
+        parsed.searchParams.set("_cdcf_reload", String(Date.now()));
         return parsed.toString();
       } catch {
         return url;
