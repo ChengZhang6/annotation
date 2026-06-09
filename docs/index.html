@@ -447,14 +447,21 @@
     }
 
     .viewer-toolbar.compact {
-      left: 50%;
+      left: auto;
       right: 8px;
-      justify-content: flex-end;
+      width: min(310px, calc(100% - 16px));
+      justify-content: flex-start;
       pointer-events: none;
     }
 
     .viewer-toolbar.compact > * {
       pointer-events: auto;
+    }
+
+    .viewer-toolbar.compact .pane-tabs {
+      position: absolute;
+      top: 0;
+      right: 86px;
     }
 
     .article-toolbar {
@@ -531,6 +538,9 @@
     }
 
     .viewer-toolbar.compact .viewer-actions {
+      position: absolute;
+      top: 0;
+      right: 0;
       gap: 8px;
       padding: 2px 7px;
       border: 1px solid var(--line);
