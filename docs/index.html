@@ -223,6 +223,10 @@
       grid-column: 1 / -1;
     }
 
+    .hidden {
+      display: none !important;
+    }
+
     .message {
       border: 1px solid var(--line);
       border-left: 4px solid var(--amber);
@@ -396,7 +400,6 @@
     </div>
     <div class="actions">
       <span id="status" class="status">Not connected</span>
-      <button id="save-config" type="button">Save config</button>
       <button id="sign-in" class="primary" type="button">Sign in with Google</button>
     </div>
   </header>
@@ -405,25 +408,12 @@
     <aside class="panel">
       <h2>Google Sheet</h2>
       <div class="panel-body">
-        <label>
-          OAuth client ID
-          <input id="client-id" autocomplete="off" placeholder="123...apps.googleusercontent.com">
-        </label>
-        <label>
-          Spreadsheet ID
-          <input id="spreadsheet-id" autocomplete="off">
-        </label>
-        <label>
-          Roster tab
-          <input id="roster-tab-name" autocomplete="off">
-        </label>
-        <label>
-          Google Form URL
-          <input id="form-url" autocomplete="off">
-        </label>
+        <input id="client-id" class="hidden" autocomplete="off">
+        <input id="spreadsheet-id" class="hidden" autocomplete="off">
+        <input id="roster-tab-name" class="hidden" autocomplete="off">
+        <input id="form-url" class="hidden" autocomplete="off">
         <div class="toolbar">
           <button id="load-roster" type="button">Load roster</button>
-          <button id="load-form" type="button">Load form</button>
         </div>
         <label>
           Article
@@ -441,7 +431,7 @@
           <button id="jump-go" class="primary wide" type="button">Go</button>
         </div>
         <div id="article-position" class="subtle">No roster loaded</div>
-        <div id="message" class="message">Add the OAuth client ID, then sign in. The spreadsheet ID is already filled from your link.</div>
+        <div id="message" class="message">Sign in, then load the article roster.</div>
       </div>
     </aside>
 
@@ -481,14 +471,12 @@
     const els = {};
     [
       "status",
-      "save-config",
       "sign-in",
       "client-id",
       "spreadsheet-id",
       "roster-tab-name",
       "form-url",
       "load-roster",
-      "load-form",
       "article-select",
       "jump-id",
       "jump-go",
@@ -516,10 +504,8 @@
       els["roster-tab-name"].value = config.rosterTabName || "article_roster";
       els["form-url"].value = config.formUrl || FORM_URL;
 
-      els["save-config"].addEventListener("click", saveConfig);
       els["sign-in"].addEventListener("click", signIn);
       els["load-roster"].addEventListener("click", loadRosterRows);
-      els["load-form"].addEventListener("click", loadFormFrame);
       els["article-select"].addEventListener("change", () => selectArticleByIndex(Number(els["article-select"].value), true));
       els["jump-go"].addEventListener("click", jumpToArticle);
       els["jump-id"].addEventListener("keydown", (event) => {
@@ -562,7 +548,6 @@
     }
 
     function signIn() {
-      saveConfig();
       requestGoogleToken("manual");
     }
 
@@ -570,7 +555,7 @@
       const config = currentConfig();
       if (!config.clientId) {
         if (mode === "manual") {
-          showMessage("OAuth client ID is required before Google sign-in.", "error");
+          showMessage("Google sign-in is not configured correctly.", "error");
         }
         return;
       }
