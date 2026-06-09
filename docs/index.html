@@ -413,6 +413,17 @@
       min-height: 20px;
     }
 
+    .viewer-toolbar.compact {
+      left: 50%;
+      right: 8px;
+      justify-content: flex-end;
+      pointer-events: none;
+    }
+
+    .viewer-toolbar.compact > * {
+      pointer-events: auto;
+    }
+
     .article-meta {
       min-width: 0;
       flex: 1 1 auto;
@@ -430,7 +441,7 @@
       padding: 2px;
       border: 1px solid var(--line);
       border-radius: 8px;
-      background: #eef1f4;
+      background: rgba(238, 241, 244, 0.92);
     }
 
     .tab-button {
@@ -470,6 +481,15 @@
       align-items: center;
       gap: 10px;
       flex: 0 0 auto;
+    }
+
+    .viewer-toolbar.compact .viewer-actions {
+      gap: 8px;
+      padding: 2px 7px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.92);
+      box-shadow: 0 4px 12px rgba(32, 35, 39, 0.10);
     }
 
     .viewer-toolbar a,
@@ -677,12 +697,14 @@
           </div>
         </div>
         <div class="viewer-pane">
-          <div class="viewer-toolbar">
+          <div class="viewer-toolbar compact">
             <div class="pane-tabs" role="tablist" aria-label="Right pane">
               <button id="tab-form" class="tab-button active" type="button" role="tab" aria-controls="form-frame">Google Form</button>
               <button id="tab-editor" class="tab-button" type="button" role="tab" aria-controls="editor-panel">Editor</button>
             </div>
-            <a id="form-open-link" href="#" target="_blank" rel="noreferrer">Open form</a>
+            <div class="viewer-actions">
+              <a id="form-open-link" href="#" target="_blank" rel="noreferrer">Open form</a>
+            </div>
           </div>
           <div id="right-content" class="right-content">
             <iframe id="form-frame" class="tab-panel" title="Google annotation form"></iframe>
