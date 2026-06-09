@@ -1351,7 +1351,7 @@
       window.clearTimeout(messageTimer);
       messageTimer = window.setTimeout(() => {
         els.message.classList.add("hidden");
-      }, level === "error" ? 6000 : 3000);
+      }, level === "error" ? 12000 : 10000);
       if (level === "error") {
         els.status.textContent = "Setup needed";
         els.status.className = "status error";
