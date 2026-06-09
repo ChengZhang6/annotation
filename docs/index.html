@@ -114,15 +114,16 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      flex-wrap: wrap;
-      gap: 14px;
-      padding: 14px 18px;
+      flex-wrap: nowrap;
+      gap: 12px;
+      padding: 8px 18px;
       border-bottom: 1px solid var(--line);
       background: rgba(255, 255, 255, 0.94);
       backdrop-filter: blur(10px);
     }
 
     .brand {
+      flex: 0 0 265px;
       display: grid;
       gap: 2px;
     }
@@ -148,11 +149,11 @@
 
     .controlbar {
       flex: 1 1 auto;
-      min-width: 360px;
+      min-width: 0;
       display: grid;
-      grid-template-columns: auto minmax(260px, 1fr) minmax(110px, 150px) auto auto auto auto;
-      align-items: end;
-      gap: 8px;
+      grid-template-columns: auto minmax(280px, 1fr) 90px auto auto auto auto minmax(140px, 260px);
+      align-items: center;
+      gap: 6px;
     }
 
     .control-field {
@@ -160,9 +161,39 @@
     }
 
     .control-message {
-      grid-column: 1 / -1;
-      padding: 7px 10px;
+      min-width: 0;
+      overflow: hidden;
+      padding: 0 4px;
+      border: 0;
+      background: transparent;
+      color: var(--muted);
       font-size: 12px;
+      line-height: 1.25;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .topbar button,
+    .topbar input,
+    .topbar select {
+      min-height: 34px;
+      padding-top: 6px;
+      padding-bottom: 6px;
+    }
+
+    .topbar button {
+      border-radius: 7px;
+      padding-left: 11px;
+      padding-right: 11px;
+    }
+
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
     }
 
     .status {
@@ -445,11 +476,9 @@
       .topbar {
         align-items: stretch;
         flex-direction: column;
-        flex-wrap: nowrap;
       }
 
       .controlbar {
-        min-width: 0;
         grid-template-columns: 1fr 1fr;
       }
 
@@ -494,11 +523,11 @@
       <input id="form-url" class="hidden" autocomplete="off">
       <button id="load-roster" type="button">Load roster</button>
       <label class="control-field">
-        Article
+        <span class="visually-hidden">Article</span>
         <select id="article-select"></select>
       </label>
       <label class="control-field">
-        articleID
+        <span class="visually-hidden">articleID</span>
         <input id="jump-id" autocomplete="off" placeholder="A050">
       </label>
       <button id="nav-prev" type="button">Prev</button>
