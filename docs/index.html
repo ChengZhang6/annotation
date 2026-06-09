@@ -489,12 +489,8 @@
       bottom: 8px;
       left: 8px;
       width: min(720px, calc(100% - 118px));
-      padding: 5px 7px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: rgba(255, 255, 255, 0.76);
-      box-shadow: 0 4px 12px rgba(32, 35, 39, 0.12);
-      backdrop-filter: blur(8px);
+      gap: 5px;
+      padding: 0;
     }
 
     .article-meta {
@@ -503,7 +499,13 @@
       display: grid;
       grid-template-columns: minmax(170px, 0.75fr) minmax(190px, 1fr);
       align-items: center;
-      gap: 10px;
+      gap: 8px;
+      padding: 3px 7px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.92);
+      box-shadow: 0 4px 12px rgba(32, 35, 39, 0.12);
+      backdrop-filter: blur(8px);
     }
 
     .pane-tabs {
@@ -560,18 +562,23 @@
       position: absolute;
       top: 0;
       right: 0;
+    }
+
+    .viewer-toolbar.compact .viewer-actions,
+    .article-toolbar .viewer-actions {
       gap: 8px;
-      padding: 2px 7px;
+      padding: 3px 7px;
       border: 1px solid var(--line);
       border-radius: 8px;
       background: rgba(255, 255, 255, 0.92);
-      box-shadow: 0 4px 12px rgba(32, 35, 39, 0.10);
+      box-shadow: 0 4px 12px rgba(32, 35, 39, 0.12);
+      backdrop-filter: blur(8px);
     }
 
     .viewer-toolbar a,
     .link-button {
       color: var(--green);
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 750;
       text-decoration: none;
       white-space: nowrap;
