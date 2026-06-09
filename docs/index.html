@@ -114,6 +114,7 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
+      flex-wrap: wrap;
       gap: 14px;
       padding: 14px 18px;
       border-bottom: 1px solid var(--line);
@@ -145,6 +146,25 @@
       flex-wrap: wrap;
     }
 
+    .controlbar {
+      flex: 1 1 auto;
+      min-width: 360px;
+      display: grid;
+      grid-template-columns: auto minmax(260px, 1fr) minmax(110px, 150px) auto auto auto auto;
+      align-items: end;
+      gap: 8px;
+    }
+
+    .control-field {
+      min-width: 0;
+    }
+
+    .control-message {
+      grid-column: 1 / -1;
+      padding: 7px 10px;
+      font-size: 12px;
+    }
+
     .status {
       display: inline-flex;
       align-items: center;
@@ -174,7 +194,7 @@
       margin: 0 auto;
       padding: 18px;
       display: grid;
-      grid-template-columns: 320px minmax(0, 1fr);
+      grid-template-columns: minmax(0, 1fr);
       gap: 16px;
     }
 
@@ -201,6 +221,10 @@
       padding: 14px;
     }
 
+    .workspace {
+      min-width: 0;
+    }
+
     .grid-two {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -211,16 +235,6 @@
       display: flex;
       gap: 8px;
       flex-wrap: wrap;
-    }
-
-    .nav-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 8px;
-    }
-
-    .nav-grid .wide {
-      grid-column: 1 / -1;
     }
 
     .hidden {
@@ -310,7 +324,6 @@
       display: grid;
       grid-template-columns: minmax(0, 1fr) minmax(420px, 1fr);
       gap: 12px;
-      padding: 14px;
     }
 
     .viewer-pane {
@@ -367,6 +380,17 @@
       .topbar {
         align-items: stretch;
         flex-direction: column;
+        flex-wrap: nowrap;
+      }
+
+      .controlbar {
+        min-width: 0;
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .controlbar .control-field:first-of-type,
+      .control-message {
+        grid-column: 1 / -1;
       }
 
       .actions button,
@@ -398,6 +422,26 @@
       <h1>CDCF Annotation</h1>
       <div class="subtle">Google login writes to the shared spreadsheet.</div>
     </div>
+    <div class="controlbar" aria-label="Article roster controls">
+      <input id="client-id" class="hidden" autocomplete="off">
+      <input id="spreadsheet-id" class="hidden" autocomplete="off">
+      <input id="roster-tab-name" class="hidden" autocomplete="off">
+      <input id="form-url" class="hidden" autocomplete="off">
+      <button id="load-roster" type="button">Load roster</button>
+      <label class="control-field">
+        Article
+        <select id="article-select"></select>
+      </label>
+      <label class="control-field">
+        articleID
+        <input id="jump-id" autocomplete="off" placeholder="A050">
+      </label>
+      <button id="nav-prev" type="button">Prev</button>
+      <button id="nav-next" type="button">Next</button>
+      <button id="jump-go" class="primary" type="button">Go</button>
+      <div id="article-position" class="subtle">No roster loaded</div>
+      <div id="message" class="message control-message">Sign in, then load the article roster.</div>
+    </div>
     <div class="actions">
       <span id="status" class="status">Not connected</span>
       <button id="sign-in" class="primary" type="button">Sign in with Google</button>
@@ -405,38 +449,7 @@
   </header>
 
   <main class="shell">
-    <aside class="panel">
-      <h2>Google Sheet</h2>
-      <div class="panel-body">
-        <input id="client-id" class="hidden" autocomplete="off">
-        <input id="spreadsheet-id" class="hidden" autocomplete="off">
-        <input id="roster-tab-name" class="hidden" autocomplete="off">
-        <input id="form-url" class="hidden" autocomplete="off">
-        <div class="toolbar">
-          <button id="load-roster" type="button">Load roster</button>
-        </div>
-        <label>
-          Article
-          <select id="article-select"></select>
-        </label>
-        <label>
-          Jump to articleID
-          <input id="jump-id" autocomplete="off" placeholder="A050">
-        </label>
-        <div class="nav-grid">
-          <button id="nav-prev10" type="button">-10</button>
-          <button id="nav-next10" type="button">+10</button>
-          <button id="nav-prev" type="button">Prev</button>
-          <button id="nav-next" type="button">Next</button>
-          <button id="jump-go" class="primary wide" type="button">Go</button>
-        </div>
-        <div id="article-position" class="subtle">No roster loaded</div>
-        <div id="message" class="message">Sign in, then load the article roster.</div>
-      </div>
-    </aside>
-
-    <section class="panel">
-      <h2>Article + Annotation Form</h2>
+    <section class="workspace">
       <div class="viewer-grid">
         <div class="viewer-pane">
           <div class="viewer-toolbar">
@@ -461,6 +474,7 @@
     const SPREADSHEET_ID = "1gNt24it0OKAaxJJb-pyXDtpd0PmfT3H1irdJUk-lPEk";
     const FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSdqQa1bmu-sLxzmfuK5-e0Jf83uIIXLZJPaWsngEUJ6alXTqw/viewform?usp=header";
     const STORAGE_KEY = "cdcf-simple-config";
+    const ROSTER_CACHE_KEY = "cdcf-roster-cache";
     const SCOPE = "https://www.googleapis.com/auth/spreadsheets";
     let accessToken = "";
     let tokenClient = null;
@@ -480,10 +494,8 @@
       "article-select",
       "jump-id",
       "jump-go",
-      "nav-prev10",
       "nav-prev",
       "nav-next",
-      "nav-next10",
       "article-position",
       "message",
       "article-frame-title",
@@ -506,7 +518,7 @@
 
       els["sign-in"].addEventListener("click", signIn);
       els["load-roster"].addEventListener("click", loadRosterRows);
-      els["article-select"].addEventListener("change", () => selectArticleByIndex(Number(els["article-select"].value), true));
+      els["article-select"].addEventListener("change", () => selectArticleByIndex(Number(els["article-select"].value), false));
       els["jump-go"].addEventListener("click", jumpToArticle);
       els["jump-id"].addEventListener("keydown", (event) => {
         if (event.key === "Enter") {
@@ -514,12 +526,11 @@
           jumpToArticle();
         }
       });
-      els["nav-prev10"].addEventListener("click", () => moveArticle(-10));
       els["nav-prev"].addEventListener("click", () => moveArticle(-1));
       els["nav-next"].addEventListener("click", () => moveArticle(1));
-      els["nav-next10"].addEventListener("click", () => moveArticle(10));
       showArticlePlaceholder();
       loadFormFrame();
+      restoreRosterCache();
       window.setTimeout(trySilentSignIn, 600);
     }
 
@@ -620,10 +631,12 @@
         const data = await sheetsFetch(`/values/${encodeURIComponent(`${quoteSheet(config.rosterTabName)}!A1:Z500`)}`);
         const rows = data.values || [];
         rosterRows = parseRosterRows(rows);
+        currentRosterIndex = -1;
         renderRosterOptions();
         if (rosterRows.length) {
           selectArticleByIndex(0, false);
         }
+        saveRosterCache();
         showMessage(`Loaded ${rosterRows.length} article roster row(s).`, "ok");
       } catch (error) {
         showMessage(error.message, "error");
@@ -687,6 +700,7 @@
       els["jump-id"].value = article.id || "";
       loadArticleFrame(article.link, article.title || article.id, openExternal);
       updateArticlePosition();
+      saveRosterCache();
     }
 
     function jumpToArticle() {
@@ -696,7 +710,7 @@
         showMessage(`Article not found: ${els["jump-id"].value}`, "error");
         return;
       }
-      selectArticleByIndex(index, true);
+      selectArticleByIndex(index, false);
     }
 
     function moveArticle(delta) {
@@ -705,7 +719,7 @@
         return;
       }
       const baseIndex = currentRosterIndex === -1 ? 0 : currentRosterIndex;
-      selectArticleByIndex(baseIndex + delta, true);
+      selectArticleByIndex(baseIndex + delta, false);
     }
 
     function updateArticlePosition() {
@@ -730,6 +744,40 @@
         window.open(link, "cdcf_article_window", "noopener");
       }
       showMessage(`Selected article: ${title || link}. If the embedded page is blocked, use the article window or Open article.`, "ok");
+    }
+
+    function restoreRosterCache() {
+      try {
+        const cached = JSON.parse(localStorage.getItem(ROSTER_CACHE_KEY) || "{}");
+        if (!Array.isArray(cached.rows) || !cached.rows.length) {
+          return;
+        }
+        rosterRows = cached.rows.map((row) => ({
+          id: String(row.id || ""),
+          title: String(row.title || ""),
+          link: String(row.link || "")
+        }));
+        renderRosterOptions();
+        const cachedIndex = Number.isInteger(cached.currentIndex) ? cached.currentIndex : 0;
+        selectArticleByIndex(cachedIndex, false);
+        const savedAt = cached.savedAt ? new Date(cached.savedAt).toLocaleString() : "";
+        showMessage(`Restored ${rosterRows.length} cached article(s)${savedAt ? ` from ${savedAt}` : ""}. Click Load roster to refresh from Google Sheets.`, "ok");
+      } catch {
+        localStorage.removeItem(ROSTER_CACHE_KEY);
+      }
+    }
+
+    function saveRosterCache() {
+      if (!rosterRows.length) {
+        localStorage.removeItem(ROSTER_CACHE_KEY);
+        return;
+      }
+      const payload = {
+        rows: rosterRows,
+        currentIndex: currentRosterIndex,
+        savedAt: Date.now()
+      };
+      localStorage.setItem(ROSTER_CACHE_KEY, JSON.stringify(payload));
     }
 
     function showArticlePlaceholder() {
