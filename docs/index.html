@@ -621,19 +621,7 @@
     .editor-panel {
       min-height: 0;
       display: grid;
-      grid-template-rows: auto minmax(0, 1fr);
-      gap: 8px;
-    }
-
-    .editor-actions {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-    }
-
-    .editor-actions .toolbar {
-      flex-wrap: nowrap;
+      grid-template-rows: minmax(0, 1fr);
     }
 
     .editor-textarea {
@@ -810,13 +798,6 @@
           <div id="right-content" class="right-content">
             <iframe id="form-frame" class="tab-panel" title="Google annotation form"></iframe>
             <div id="editor-panel" class="tab-panel editor-panel hidden">
-              <div class="editor-actions">
-                <div id="editor-title" class="viewer-title">Clean text editor</div>
-                <div class="toolbar">
-                  <button id="copy-editor" type="button">Copy</button>
-                  <button id="clear-editor" type="button">Clear</button>
-                </div>
-              </div>
               <textarea id="clean-text-editor" class="editor-textarea" autocomplete="off" spellcheck="true" placeholder="Paste and edit clean text here"></textarea>
             </div>
             <div class="zoom-controls" aria-label="Right pane zoom">
@@ -882,10 +863,7 @@
       "right-content",
       "form-frame",
       "editor-panel",
-      "editor-title",
       "clean-text-editor",
-      "copy-editor",
-      "clear-editor",
       "right-zoom-out",
       "right-zoom-reset",
       "right-zoom-in"
@@ -917,8 +895,6 @@
       els["tab-form"].addEventListener("click", () => setRightTab("form"));
       els["tab-editor"].addEventListener("click", () => setRightTab("editor"));
       els["clean-text-editor"].addEventListener("input", saveCurrentEditorDraft);
-      els["copy-editor"].addEventListener("click", copyEditorText);
-      els["clear-editor"].addEventListener("click", clearEditorText);
       els["article-zoom-out"].addEventListener("click", () => changePaneZoom("article", -0.1));
       els["article-zoom-in"].addEventListener("click", () => changePaneZoom("article", 0.1));
       els["article-zoom-reset"].addEventListener("click", () => setPaneZoom("article", 1));
@@ -1254,9 +1230,6 @@
       const key = editorCacheKey(article);
       const cache = loadEditorCache();
       els["clean-text-editor"].value = key ? cache[key] || "" : "";
-      els["editor-title"].textContent = article && article.id
-        ? `${article.id} clean text`
-        : "Clean text editor";
     }
 
     function saveCurrentEditorDraft() {
@@ -1268,24 +1241,6 @@
       const cache = loadEditorCache();
       cache[key] = els["clean-text-editor"].value;
       saveEditorCache(cache);
-    }
-
-    async function copyEditorText() {
-      const text = els["clean-text-editor"].value;
-      try {
-        await navigator.clipboard.writeText(text);
-        showMessage("Editor text copied.", "ok");
-      } catch {
-        els["clean-text-editor"].select();
-        document.execCommand("copy");
-        showMessage("Editor text copied.", "ok");
-      }
-    }
-
-    function clearEditorText() {
-      els["clean-text-editor"].value = "";
-      saveCurrentEditorDraft();
-      els["clean-text-editor"].focus();
     }
 
     function restorePaneZoom() {
