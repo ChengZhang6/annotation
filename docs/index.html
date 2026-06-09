@@ -154,7 +154,7 @@
       flex: 1 1 auto;
       min-width: 0;
       display: grid;
-      grid-template-columns: auto minmax(240px, 1fr) 78px auto auto auto auto;
+      grid-template-columns: auto minmax(260px, 560px) 78px auto auto auto auto;
       align-items: center;
       gap: 5px;
     }
@@ -394,19 +394,32 @@
     }
 
     .viewer-pane {
+      position: relative;
       min-width: 0;
       min-height: 0;
-      display: grid;
-      grid-template-rows: auto minmax(0, 1fr);
-      gap: 2px;
+      height: 100%;
     }
 
     .viewer-toolbar {
+      position: absolute;
+      top: 4px;
+      left: 8px;
+      right: 8px;
+      z-index: 5;
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 10px;
       min-height: 20px;
+    }
+
+    .article-meta {
+      min-width: 0;
+      flex: 1 1 auto;
+      display: grid;
+      grid-template-columns: minmax(170px, 0.75fr) minmax(190px, 1fr);
+      align-items: center;
+      gap: 10px;
     }
 
     .pane-tabs {
@@ -440,13 +453,16 @@
 
     .viewer-title {
       min-width: 0;
-      max-width: min(48vw, 760px);
       color: var(--muted);
       font-size: 12px;
       font-weight: 750;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+
+    .article-url {
+      color: #4e5e6e;
     }
 
     .viewer-actions {
@@ -599,7 +615,7 @@
       }
 
       .viewer-pane {
-        grid-template-rows: auto 520px;
+        height: 520px;
       }
     }
   </style>
@@ -642,7 +658,10 @@
       <div class="viewer-grid">
         <div class="viewer-pane">
           <div class="viewer-toolbar">
-            <div id="article-frame-title" class="viewer-title">Select an article from the roster</div>
+            <div class="article-meta">
+              <div id="article-frame-title" class="viewer-title">Select an article from the roster</div>
+              <div id="article-frame-link" class="viewer-title article-url"></div>
+            </div>
             <div class="viewer-actions">
               <button id="article-refresh" class="link-button" type="button">Refresh article</button>
               <a id="article-open-link" href="#" target="_blank" rel="noreferrer">Open article</a>
@@ -725,6 +744,7 @@
       "article-position",
       "message",
       "article-frame-title",
+      "article-frame-link",
       "article-refresh",
       "article-open-link",
       "article-frame-wrap",
@@ -995,8 +1015,10 @@
         return;
       }
       els["article-frame"].removeAttribute("srcdoc");
-      els["article-frame-title"].textContent = link;
-      els["article-frame-title"].title = link;
+      els["article-frame-title"].textContent = title || articleId || "Article";
+      els["article-frame-title"].title = title || articleId || "Article";
+      els["article-frame-link"].textContent = link;
+      els["article-frame-link"].title = link;
       els["article-open-link"].href = link;
       els["article-frame"].src = link;
       if (openExternal) {
@@ -1175,6 +1197,10 @@
     }
 
     function showArticlePlaceholder() {
+      els["article-frame-title"].textContent = "Select an article from the roster";
+      els["article-frame-title"].title = "";
+      els["article-frame-link"].textContent = "";
+      els["article-frame-link"].title = "";
       els["article-frame"].src = "about:blank";
       els["article-frame"].srcdoc = `
         <!doctype html>
