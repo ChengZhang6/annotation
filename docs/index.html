@@ -461,13 +461,16 @@
     }
 
     .right-content {
+      position: relative;
       min-height: 0;
       height: 100%;
+      overflow: hidden;
     }
 
     .tab-panel {
       width: 100%;
       height: 100%;
+      transform-origin: top left;
     }
 
     .editor-panel {
@@ -502,6 +505,43 @@
       border: 1px solid var(--line);
       border-radius: 8px;
       background: #ffffff;
+    }
+
+    .zoom-box {
+      position: relative;
+      min-height: 0;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    .zoom-controls {
+      position: absolute;
+      right: 8px;
+      bottom: 8px;
+      z-index: 4;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 3px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.92);
+      box-shadow: 0 4px 12px rgba(32, 35, 39, 0.12);
+    }
+
+    .zoom-controls button {
+      min-width: 25px;
+      min-height: 24px;
+      border-radius: 6px;
+      padding: 0 7px;
+      font-size: 12px;
+      font-weight: 750;
+      line-height: 1;
+    }
+
+    .zoom-readout {
+      min-width: 46px;
+      color: var(--muted);
     }
 
     @media (max-width: 860px) {
@@ -588,7 +628,14 @@
             <div id="article-frame-title" class="viewer-title">Select an article from the roster</div>
             <a id="article-open-link" href="#" target="_blank" rel="noreferrer">Open article</a>
           </div>
-          <iframe id="article-frame" title="Article viewer"></iframe>
+          <div id="article-frame-wrap" class="zoom-box">
+            <iframe id="article-frame" class="tab-panel" title="Article viewer"></iframe>
+            <div class="zoom-controls" aria-label="Article zoom">
+              <button id="article-zoom-out" type="button" aria-label="Zoom article out">-</button>
+              <button id="article-zoom-reset" class="zoom-readout" type="button" aria-label="Reset article zoom">100%</button>
+              <button id="article-zoom-in" type="button" aria-label="Zoom article in">+</button>
+            </div>
+          </div>
         </div>
         <div class="viewer-pane">
           <div class="viewer-toolbar">
@@ -598,7 +645,7 @@
             </div>
             <a id="form-open-link" href="#" target="_blank" rel="noreferrer">Open form</a>
           </div>
-          <div class="right-content">
+          <div id="right-content" class="right-content">
             <iframe id="form-frame" class="tab-panel" title="Google annotation form"></iframe>
             <div id="editor-panel" class="tab-panel editor-panel hidden">
               <div class="editor-actions">
@@ -609,6 +656,11 @@
                 </div>
               </div>
               <textarea id="clean-text-editor" class="editor-textarea" autocomplete="off" spellcheck="true" placeholder="Paste and edit clean text here"></textarea>
+            </div>
+            <div class="zoom-controls" aria-label="Right pane zoom">
+              <button id="right-zoom-out" type="button" aria-label="Zoom right pane out">-</button>
+              <button id="right-zoom-reset" class="zoom-readout" type="button" aria-label="Reset right pane zoom">100%</button>
+              <button id="right-zoom-in" type="button" aria-label="Zoom right pane in">+</button>
             </div>
           </div>
         </div>
@@ -626,6 +678,7 @@
     const ROSTER_CACHE_KEY = "cdcf-roster-cache";
     const EDITOR_CACHE_KEY = "cdcf-editor-cache";
     const RIGHT_TAB_KEY = "cdcf-right-tab";
+    const ZOOM_CACHE_KEY = "cdcf-pane-zoom";
     const SCOPE = "https://www.googleapis.com/auth/spreadsheets";
     let accessToken = "";
     let tokenClient = null;
@@ -633,6 +686,7 @@
     let rosterRows = [];
     let currentRosterIndex = -1;
     let messageTimer = 0;
+    let zoomState = { article: 1, right: 1 };
 
     const els = {};
     [
@@ -652,16 +706,24 @@
       "message",
       "article-frame-title",
       "article-open-link",
+      "article-frame-wrap",
       "article-frame",
+      "article-zoom-out",
+      "article-zoom-reset",
+      "article-zoom-in",
       "tab-form",
       "tab-editor",
       "form-open-link",
+      "right-content",
       "form-frame",
       "editor-panel",
       "editor-title",
       "clean-text-editor",
       "copy-editor",
-      "clear-editor"
+      "clear-editor",
+      "right-zoom-out",
+      "right-zoom-reset",
+      "right-zoom-in"
     ].forEach((id) => {
       els[id] = document.getElementById(id);
     });
@@ -692,6 +754,13 @@
       els["clean-text-editor"].addEventListener("input", saveCurrentEditorDraft);
       els["copy-editor"].addEventListener("click", copyEditorText);
       els["clear-editor"].addEventListener("click", clearEditorText);
+      els["article-zoom-out"].addEventListener("click", () => changePaneZoom("article", -0.1));
+      els["article-zoom-in"].addEventListener("click", () => changePaneZoom("article", 0.1));
+      els["article-zoom-reset"].addEventListener("click", () => setPaneZoom("article", 1));
+      els["right-zoom-out"].addEventListener("click", () => changePaneZoom("right", -0.1));
+      els["right-zoom-in"].addEventListener("click", () => changePaneZoom("right", 0.1));
+      els["right-zoom-reset"].addEventListener("click", () => setPaneZoom("right", 1));
+      restorePaneZoom();
       showArticlePlaceholder();
       loadFormFrame();
       setRightTab(localStorage.getItem(RIGHT_TAB_KEY) === "editor" ? "editor" : "form");
@@ -1026,6 +1095,50 @@
       els["clean-text-editor"].value = "";
       saveCurrentEditorDraft();
       els["clean-text-editor"].focus();
+    }
+
+    function restorePaneZoom() {
+      try {
+        const cached = JSON.parse(localStorage.getItem(ZOOM_CACHE_KEY) || "{}");
+        zoomState.article = sanitizeZoom(cached.article, 1);
+        zoomState.right = sanitizeZoom(cached.right, 1);
+      } catch {
+        zoomState = { article: 1, right: 1 };
+      }
+      applyPaneZoom("article");
+      applyPaneZoom("right");
+    }
+
+    function changePaneZoom(pane, delta) {
+      setPaneZoom(pane, zoomState[pane] + delta);
+    }
+
+    function setPaneZoom(pane, value) {
+      zoomState[pane] = sanitizeZoom(value, 1);
+      applyPaneZoom(pane);
+      localStorage.setItem(ZOOM_CACHE_KEY, JSON.stringify(zoomState));
+    }
+
+    function applyPaneZoom(pane) {
+      const zoom = zoomState[pane];
+      const targets = pane === "article"
+        ? [els["article-frame"]]
+        : [els["form-frame"], els["editor-panel"]];
+      targets.forEach((target) => {
+        target.style.width = `${100 / zoom}%`;
+        target.style.height = `${100 / zoom}%`;
+        target.style.transform = `scale(${zoom})`;
+      });
+      const label = pane === "article" ? els["article-zoom-reset"] : els["right-zoom-reset"];
+      label.textContent = `${Math.round(zoom * 100)}%`;
+    }
+
+    function sanitizeZoom(value, fallback) {
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric)) {
+        return fallback;
+      }
+      return Math.max(0.6, Math.min(1.8, Math.round(numeric * 10) / 10));
     }
 
     function showArticlePlaceholder() {
