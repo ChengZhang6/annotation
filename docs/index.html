@@ -36,6 +36,7 @@
 
     button,
     input,
+    select,
     textarea {
       font: inherit;
       letter-spacing: 0;
@@ -73,6 +74,7 @@
     }
 
     input,
+    select,
     textarea {
       width: 100%;
       border: 1px solid var(--line);
@@ -90,6 +92,7 @@
     }
 
     input:focus,
+    select:focus,
     textarea:focus,
     button:focus-visible {
       border-color: var(--blue);
@@ -210,6 +213,16 @@
       flex-wrap: wrap;
     }
 
+    .nav-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .nav-grid .wide {
+      grid-column: 1 / -1;
+    }
+
     .message {
       border: 1px solid var(--line);
       border-left: 4px solid var(--amber);
@@ -299,7 +312,7 @@
     .viewer-pane {
       min-width: 0;
       display: grid;
-      grid-template-rows: auto minmax(520px, 68vh);
+      grid-template-rows: auto minmax(680px, calc(100vh - 190px));
       gap: 8px;
     }
 
@@ -401,10 +414,6 @@
           <input id="spreadsheet-id" autocomplete="off">
         </label>
         <label>
-          Write tab
-          <input id="tab-name" autocomplete="off">
-        </label>
-        <label>
           Roster tab
           <input id="roster-tab-name" autocomplete="off">
         </label>
@@ -413,60 +422,30 @@
           <input id="form-url" autocomplete="off">
         </label>
         <div class="toolbar">
-          <button id="prepare-tab" type="button">Prepare tab</button>
-          <button id="load-recent" type="button">Load recent</button>
           <button id="load-roster" type="button">Load roster</button>
           <button id="load-form" type="button">Load form</button>
         </div>
+        <label>
+          Article
+          <select id="article-select"></select>
+        </label>
+        <label>
+          Jump to articleID
+          <input id="jump-id" autocomplete="off" placeholder="A050">
+        </label>
+        <div class="nav-grid">
+          <button id="nav-prev10" type="button">-10</button>
+          <button id="nav-next10" type="button">+10</button>
+          <button id="nav-prev" type="button">Prev</button>
+          <button id="nav-next" type="button">Next</button>
+          <button id="jump-go" class="primary wide" type="button">Go</button>
+        </div>
+        <div id="article-position" class="subtle">No roster loaded</div>
         <div id="message" class="message">Add the OAuth client ID, then sign in. The spreadsheet ID is already filled from your link.</div>
       </div>
     </aside>
 
     <section class="panel">
-      <h2>Annotation Row</h2>
-      <div class="panel-body">
-        <form id="annotation-form">
-          <div class="grid-two">
-            <label>
-              Article link
-              <input id="article-link" autocomplete="off">
-            </label>
-            <label>
-              Question
-              <input id="question" autocomplete="off">
-            </label>
-          </div>
-          <label>
-            Clean text
-            <textarea id="clean-text"></textarea>
-          </label>
-          <div class="grid-two">
-            <label>
-              Answer
-              <textarea id="answer"></textarea>
-            </label>
-            <label>
-              Evidence
-              <textarea id="evidence"></textarea>
-            </label>
-          </div>
-          <label>
-            Notes
-            <textarea id="notes"></textarea>
-          </label>
-          <div class="toolbar">
-            <label class="checkline">
-              <input id="starred" type="checkbox">
-              Star
-            </label>
-            <button id="submit-row" class="primary" type="submit">Append row</button>
-            <button id="clear-form" type="button">Clear</button>
-          </div>
-        </form>
-      </div>
-    </section>
-
-    <section class="panel" style="grid-column: 1 / -1;">
       <h2>Article + Annotation Form</h2>
       <div class="viewer-grid">
         <div class="viewer-pane">
@@ -485,42 +464,6 @@
         </div>
       </div>
     </section>
-
-    <section class="panel" style="grid-column: 1 / -1;">
-      <h2>Article Roster</h2>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Article ID</th>
-              <th>Article Title</th>
-              <th>Link to article</th>
-            </tr>
-          </thead>
-          <tbody id="roster-rows"></tbody>
-        </table>
-      </div>
-    </section>
-
-    <section class="panel" style="grid-column: 1 / -1;">
-      <h2>Recent Rows</h2>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Time</th>
-              <th>Article</th>
-              <th>Question</th>
-              <th>Answer</th>
-              <th>Evidence</th>
-              <th>Notes</th>
-              <th>Star</th>
-            </tr>
-          </thead>
-          <tbody id="recent-rows"></tbody>
-        </table>
-      </div>
-    </section>
   </main>
 
   <script>
@@ -529,11 +472,11 @@
     const FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSdqQa1bmu-sLxzmfuK5-e0Jf83uIIXLZJPaWsngEUJ6alXTqw/viewform?usp=header";
     const STORAGE_KEY = "cdcf-simple-config";
     const SCOPE = "https://www.googleapis.com/auth/spreadsheets";
-    const HEADERS = ["timestamp", "article_link", "clean_text", "question", "answer", "evidence", "notes", "starred", "user_note"];
-
     let accessToken = "";
     let tokenClient = null;
     let authRequestMode = "manual";
+    let rosterRows = [];
+    let currentRosterIndex = -1;
 
     const els = {};
     [
@@ -542,30 +485,24 @@
       "sign-in",
       "client-id",
       "spreadsheet-id",
-      "tab-name",
       "roster-tab-name",
       "form-url",
-      "prepare-tab",
-      "load-recent",
       "load-roster",
       "load-form",
+      "article-select",
+      "jump-id",
+      "jump-go",
+      "nav-prev10",
+      "nav-prev",
+      "nav-next",
+      "nav-next10",
+      "article-position",
       "message",
-      "annotation-form",
-      "article-link",
-      "clean-text",
-      "question",
-      "answer",
-      "evidence",
-      "notes",
-      "starred",
-      "clear-form",
       "article-frame-title",
       "article-open-link",
       "article-frame",
       "form-open-link",
-      "form-frame",
-      "roster-rows",
-      "recent-rows"
+      "form-frame"
     ].forEach((id) => {
       els[id] = document.getElementById(id);
     });
@@ -576,18 +513,25 @@
       const config = loadConfig();
       els["client-id"].value = config.clientId || OAUTH_CLIENT_ID;
       els["spreadsheet-id"].value = config.spreadsheetId || SPREADSHEET_ID;
-      els["tab-name"].value = config.tabName || "Annotations";
       els["roster-tab-name"].value = config.rosterTabName || "article_roster";
       els["form-url"].value = config.formUrl || FORM_URL;
 
       els["save-config"].addEventListener("click", saveConfig);
       els["sign-in"].addEventListener("click", signIn);
-      els["prepare-tab"].addEventListener("click", prepareTab);
-      els["load-recent"].addEventListener("click", loadRecentRows);
       els["load-roster"].addEventListener("click", loadRosterRows);
       els["load-form"].addEventListener("click", loadFormFrame);
-      els["annotation-form"].addEventListener("submit", appendAnnotation);
-      els["clear-form"].addEventListener("click", () => els["annotation-form"].reset());
+      els["article-select"].addEventListener("change", () => selectArticleByIndex(Number(els["article-select"].value), true));
+      els["jump-go"].addEventListener("click", jumpToArticle);
+      els["jump-id"].addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          jumpToArticle();
+        }
+      });
+      els["nav-prev10"].addEventListener("click", () => moveArticle(-10));
+      els["nav-prev"].addEventListener("click", () => moveArticle(-1));
+      els["nav-next"].addEventListener("click", () => moveArticle(1));
+      els["nav-next10"].addEventListener("click", () => moveArticle(10));
       showArticlePlaceholder();
       loadFormFrame();
       window.setTimeout(trySilentSignIn, 600);
@@ -612,7 +556,6 @@
       return {
         clientId: els["client-id"].value.trim(),
         spreadsheetId: els["spreadsheet-id"].value.trim() || SPREADSHEET_ID,
-        tabName: els["tab-name"].value.trim() || "Annotations",
         rosterTabName: els["roster-tab-name"].value.trim() || "article_roster",
         formUrl: els["form-url"].value.trim() || FORM_URL
       };
@@ -685,76 +628,18 @@
       }, 250);
     }
 
-    async function prepareTab() {
-      try {
-        requireToken();
-        const config = currentConfig();
-        const metadata = await sheetsFetch("?fields=sheets(properties(title))");
-        const tabs = new Set((metadata.sheets || []).map((sheet) => sheet.properties.title));
-        if (!tabs.has(config.tabName)) {
-          await sheetsFetch(":batchUpdate", {
-            method: "POST",
-            body: JSON.stringify({
-              requests: [{ addSheet: { properties: { title: config.tabName } } }]
-            })
-          });
-        }
-        await updateValues(`${quoteSheet(config.tabName)}!A1:I1`, [HEADERS]);
-        showMessage(`Tab ready: ${config.tabName}`, "ok");
-      } catch (error) {
-        showMessage(error.message, "error");
-      }
-    }
-
-    async function appendAnnotation(event) {
-      event.preventDefault();
-      try {
-        requireToken();
-        const config = currentConfig();
-        const row = [
-          new Date().toISOString(),
-          els["article-link"].value.trim(),
-          els["clean-text"].value.trim(),
-          els.question.value.trim(),
-          els.answer.value.trim(),
-          els.evidence.value.trim(),
-          els.notes.value.trim(),
-          els.starred.checked ? "TRUE" : "",
-          ""
-        ];
-        await appendValues(config.tabName, row);
-        showMessage("Row appended to Google Sheets.", "ok");
-        await loadRecentRows();
-      } catch (error) {
-        showMessage(error.message, "error");
-      }
-    }
-
-    async function loadRecentRows() {
-      try {
-        requireToken();
-        const config = currentConfig();
-        const data = await sheetsFetch(`/values/${encodeURIComponent(`${quoteSheet(config.tabName)}!A2:I200`)}`);
-        const rows = data.values || [];
-        renderRows(rows.slice(-50).reverse());
-        showMessage(`Loaded ${rows.length} row(s).`, "ok");
-      } catch (error) {
-        showMessage(error.message, "error");
-      }
-    }
-
     async function loadRosterRows() {
       try {
         requireToken();
         const config = currentConfig();
         const data = await sheetsFetch(`/values/${encodeURIComponent(`${quoteSheet(config.rosterTabName)}!A1:Z500`)}`);
         const rows = data.values || [];
-        const roster = parseRosterRows(rows);
-        renderRosterRows(roster);
-        if (roster.length) {
-          loadArticleFrame(roster[0].link, roster[0].title, 0);
+        rosterRows = parseRosterRows(rows);
+        renderRosterOptions();
+        if (rosterRows.length) {
+          selectArticleByIndex(0, false);
         }
-        showMessage(`Loaded ${roster.length} article roster row(s).`, "ok");
+        showMessage(`Loaded ${rosterRows.length} article roster row(s).`, "ok");
       } catch (error) {
         showMessage(error.message, "error");
       }
@@ -778,35 +663,6 @@
       return body;
     }
 
-    function appendValues(tabName, row) {
-      const range = `${quoteSheet(tabName)}!A1`;
-      return sheetsFetch(`/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`, {
-        method: "POST",
-        body: JSON.stringify({ values: [row] })
-      });
-    }
-
-    function updateValues(range, values) {
-      return sheetsFetch(`/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`, {
-        method: "PUT",
-        body: JSON.stringify({ values })
-      });
-    }
-
-    function renderRows(rows) {
-      els["recent-rows"].innerHTML = rows.map((row) => `
-        <tr>
-          <td>${escapeHtml(row[0] || "")}</td>
-          <td>${escapeHtml(row[1] || "")}</td>
-          <td>${escapeHtml(row[3] || "")}</td>
-          <td>${escapeHtml(row[4] || "")}</td>
-          <td>${escapeHtml(row[5] || "")}</td>
-          <td>${escapeHtml(row[6] || "")}</td>
-          <td>${escapeHtml(row[7] || "")}</td>
-        </tr>
-      `).join("");
-    }
-
     function parseRosterRows(rows) {
       if (!rows.length) {
         return [];
@@ -825,33 +681,66 @@
         }));
     }
 
-    function renderRosterRows(rows) {
-      els["roster-rows"].innerHTML = rows.map((row, index) => `
-        <tr class="roster-row" data-index="${index}" data-link="${escapeHtml(row.link)}" data-title="${escapeHtml(row.title)}">
-          <td>${escapeHtml(row.id)}</td>
-          <td>${escapeHtml(row.title)}</td>
-          <td class="link-cell">${row.link ? `<a href="${escapeHtml(row.link)}" target="_blank" rel="noreferrer">${escapeHtml(row.link)}</a>` : ""}</td>
-        </tr>
-      `).join("");
-
-      els["roster-rows"].querySelectorAll(".roster-row").forEach((row) => {
-        row.addEventListener("click", () => {
-          loadArticleFrame(row.dataset.link || "", row.dataset.title || "", Number(row.dataset.index), true);
-        });
-      });
+    function renderRosterOptions() {
+      els["article-select"].innerHTML = rosterRows.map((row, index) => {
+        const labelParts = [row.id, row.title].filter(Boolean);
+        return `<option value="${index}">${escapeHtml(labelParts.join(" - ") || `Article ${index + 1}`)}</option>`;
+      }).join("");
+      updateArticlePosition();
     }
 
-    function loadArticleFrame(link, title, index, openExternal = false) {
+    function selectArticleByIndex(index, openExternal = false) {
+      if (!rosterRows.length) {
+        showMessage("Load roster first.", "warn");
+        return;
+      }
+      const requestedIndex = Number.isFinite(index) ? index : 0;
+      const boundedIndex = Math.max(0, Math.min(rosterRows.length - 1, requestedIndex));
+      const article = rosterRows[boundedIndex];
+      currentRosterIndex = boundedIndex;
+      els["article-select"].value = String(boundedIndex);
+      els["jump-id"].value = article.id || "";
+      loadArticleFrame(article.link, article.title || article.id, openExternal);
+      updateArticlePosition();
+    }
+
+    function jumpToArticle() {
+      const target = normalizeArticleId(els["jump-id"].value);
+      const index = rosterRows.findIndex((row) => normalizeArticleId(row.id) === target);
+      if (index === -1) {
+        showMessage(`Article not found: ${els["jump-id"].value}`, "error");
+        return;
+      }
+      selectArticleByIndex(index, true);
+    }
+
+    function moveArticle(delta) {
+      if (!rosterRows.length) {
+        showMessage("Load roster first.", "warn");
+        return;
+      }
+      const baseIndex = currentRosterIndex === -1 ? 0 : currentRosterIndex;
+      selectArticleByIndex(baseIndex + delta, true);
+    }
+
+    function updateArticlePosition() {
+      if (!rosterRows.length || currentRosterIndex === -1) {
+        els["article-position"].textContent = rosterRows.length ? `${rosterRows.length} articles loaded` : "No roster loaded";
+        return;
+      }
+      const article = rosterRows[currentRosterIndex];
+      els["article-position"].textContent = `${currentRosterIndex + 1} / ${rosterRows.length}  ${article.id || ""}`;
+    }
+
+    function loadArticleFrame(link, title, openExternal = false) {
       if (!link) {
         showMessage("This roster row has no article link.", "warn");
         return;
       }
       els["article-frame"].removeAttribute("srcdoc");
-      els["article-link"].value = link;
       els["article-frame-title"].textContent = title || link;
       els["article-open-link"].href = link;
       els["article-frame"].src = link;
-      highlightRosterRow(index);
       if (openExternal) {
         window.open(link, "cdcf_article_window", "noopener");
       }
@@ -873,12 +762,6 @@
           </body>
         </html>
       `;
-    }
-
-    function highlightRosterRow(index) {
-      els["roster-rows"].querySelectorAll(".roster-row").forEach((row) => {
-        row.classList.toggle("active", Number(row.dataset.index) === index);
-      });
     }
 
     function loadFormFrame() {
@@ -913,6 +796,15 @@
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "_")
         .replace(/^_+|_+$/g, "");
+    }
+
+    function normalizeArticleId(value) {
+      const raw = String(value || "").trim().toUpperCase();
+      const match = raw.match(/^A?0*(\d+)$/);
+      if (match) {
+        return `A${match[1].padStart(3, "0")}`;
+      }
+      return raw;
     }
 
     function findHeaderIndex(headers, candidates) {
