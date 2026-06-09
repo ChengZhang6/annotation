@@ -115,23 +115,26 @@
       align-items: center;
       justify-content: space-between;
       flex-wrap: nowrap;
-      gap: 12px;
-      padding: 8px 18px;
+      gap: 8px;
+      padding: 2px 12px;
       border-bottom: 1px solid var(--line);
       background: rgba(255, 255, 255, 0.94);
       backdrop-filter: blur(10px);
     }
 
     .brand {
-      flex: 0 0 265px;
+      flex: 0 0 auto;
       display: grid;
-      gap: 2px;
     }
 
     h1 {
       margin: 0;
-      font-size: 18px;
+      font-size: 15px;
       line-height: 1.1;
+    }
+
+    .brand .subtle {
+      display: none;
     }
 
     .subtle {
@@ -151,40 +154,43 @@
       flex: 1 1 auto;
       min-width: 0;
       display: grid;
-      grid-template-columns: auto minmax(280px, 1fr) 90px auto auto auto auto minmax(140px, 260px);
+      grid-template-columns: auto minmax(240px, 1fr) 78px auto auto auto auto;
       align-items: center;
-      gap: 6px;
+      gap: 5px;
     }
 
     .control-field {
       min-width: 0;
     }
 
-    .control-message {
-      min-width: 0;
-      overflow: hidden;
-      padding: 0 4px;
-      border: 0;
-      background: transparent;
-      color: var(--muted);
-      font-size: 12px;
-      line-height: 1.25;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
     .topbar button,
     .topbar input,
     .topbar select {
-      min-height: 34px;
-      padding-top: 6px;
-      padding-bottom: 6px;
+      min-height: 30px;
+      padding-top: 3px;
+      padding-bottom: 3px;
+      border-radius: 6px;
+      font-size: 13px;
     }
 
     .topbar button {
-      border-radius: 7px;
-      padding-left: 11px;
-      padding-right: 11px;
+      padding-left: 10px;
+      padding-right: 10px;
+    }
+
+    .topbar .icon-button {
+      width: 30px;
+      padding-left: 0;
+      padding-right: 0;
+      display: grid;
+      place-items: center;
+    }
+
+    .google-mark {
+      font-family: Arial, sans-serif;
+      font-size: 16px;
+      font-weight: 800;
+      line-height: 1;
     }
 
     .visually-hidden {
@@ -199,9 +205,9 @@
     .status {
       display: inline-flex;
       align-items: center;
-      min-height: 30px;
+      min-height: 26px;
       border-radius: 999px;
-      padding: 0 11px;
+      padding: 0 9px;
       background: #eef1f4;
       color: var(--muted);
       font-size: 12px;
@@ -223,7 +229,8 @@
       width: 100%;
       max-width: none;
       margin: 0 auto;
-      padding: 18px;
+      height: calc(100vh - 38px);
+      padding: 2px 12px 4px;
       display: grid;
       grid-template-columns: minmax(0, 1fr);
       gap: 16px;
@@ -254,6 +261,8 @@
 
     .workspace {
       min-width: 0;
+      min-height: 0;
+      height: 100%;
     }
 
     .grid-two {
@@ -281,6 +290,32 @@
       padding: 10px 12px;
       font-size: 13px;
       line-height: 1.45;
+    }
+
+    .toast {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      z-index: 50;
+      max-width: min(520px, calc(100vw - 36px));
+      border: 1px solid var(--line);
+      border-left: 4px solid var(--amber);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.96);
+      box-shadow: var(--shadow);
+      color: var(--text);
+      padding: 11px 13px;
+      font-size: 13px;
+      line-height: 1.4;
+      transition: opacity 160ms ease, transform 160ms ease;
+    }
+
+    .toast.ok {
+      border-left-color: var(--green);
+    }
+
+    .toast.error {
+      border-left-color: var(--red);
     }
 
     form {
@@ -352,16 +387,18 @@
     }
 
     .viewer-grid {
+      height: 100%;
       display: grid;
       grid-template-columns: minmax(0, 1fr) minmax(420px, 1fr);
-      gap: 12px;
+      gap: 10px;
     }
 
     .viewer-pane {
       min-width: 0;
+      min-height: 0;
       display: grid;
-      grid-template-rows: auto minmax(680px, calc(100vh - 190px));
-      gap: 8px;
+      grid-template-rows: auto minmax(0, 1fr);
+      gap: 2px;
     }
 
     .viewer-toolbar {
@@ -369,7 +406,7 @@
       align-items: center;
       justify-content: space-between;
       gap: 10px;
-      min-height: 38px;
+      min-height: 20px;
     }
 
     .pane-tabs {
@@ -377,18 +414,18 @@
       display: inline-flex;
       align-items: center;
       gap: 4px;
-      padding: 3px;
+      padding: 2px;
       border: 1px solid var(--line);
       border-radius: 8px;
       background: #eef1f4;
     }
 
     .tab-button {
-      min-height: 30px;
+      min-height: 20px;
       border-color: transparent;
       border-radius: 6px;
       background: transparent;
-      padding: 0 10px;
+      padding: 0 8px;
       color: var(--muted);
       font-size: 12px;
       font-weight: 750;
@@ -482,8 +519,7 @@
         grid-template-columns: 1fr 1fr;
       }
 
-      .controlbar .control-field:first-of-type,
-      .control-message {
+      .controlbar .control-field:first-of-type {
         grid-column: 1 / -1;
       }
 
@@ -493,6 +529,7 @@
       }
 
       .shell {
+        height: auto;
         padding: 12px;
       }
 
@@ -534,11 +571,12 @@
       <button id="nav-next" type="button">Next</button>
       <button id="jump-go" class="primary" type="button">Go</button>
       <div id="article-position" class="subtle">No roster loaded</div>
-      <div id="message" class="message control-message">Sign in, then load the article roster.</div>
     </div>
     <div class="actions">
       <span id="status" class="status">Not connected</span>
-      <button id="sign-in" class="primary" type="button">Sign in with Google</button>
+      <button id="sign-in" class="primary icon-button" type="button" aria-label="Sign in with Google" title="Sign in with Google">
+        <span class="google-mark" aria-hidden="true">G</span>
+      </button>
     </div>
   </header>
 
@@ -578,6 +616,8 @@
     </section>
   </main>
 
+  <div id="message" class="toast hidden" role="status" aria-live="polite"></div>
+
   <script>
     const OAUTH_CLIENT_ID = "851780710057-jilmd0lqqm402i2gsnpf9o5t3plf1vkr.apps.googleusercontent.com";
     const SPREADSHEET_ID = "1gNt24it0OKAaxJJb-pyXDtpd0PmfT3H1irdJUk-lPEk";
@@ -592,6 +632,7 @@
     let authRequestMode = "manual";
     let rosterRows = [];
     let currentRosterIndex = -1;
+    let messageTimer = 0;
 
     const els = {};
     [
@@ -823,7 +864,7 @@
       currentRosterIndex = boundedIndex;
       els["article-select"].value = String(boundedIndex);
       els["jump-id"].value = article.id || "";
-      loadArticleFrame(article.link, article.title || article.id, openExternal);
+      loadArticleFrame(article.link, article.title || article.id, openExternal, article.id);
       loadEditorDraft(article);
       updateArticlePosition();
       saveRosterCache();
@@ -857,19 +898,20 @@
       els["article-position"].textContent = `${currentRosterIndex + 1} / ${rosterRows.length}  ${article.id || ""}`;
     }
 
-    function loadArticleFrame(link, title, openExternal = false) {
+    function loadArticleFrame(link, title, openExternal = false, articleId = "") {
       if (!link) {
         showMessage("This roster row has no article link.", "warn");
         return;
       }
       els["article-frame"].removeAttribute("srcdoc");
-      els["article-frame-title"].textContent = title || link;
+      els["article-frame-title"].textContent = link;
+      els["article-frame-title"].title = link;
       els["article-open-link"].href = link;
       els["article-frame"].src = link;
       if (openExternal) {
         window.open(link, "cdcf_article_window", "noopener");
       }
-      showMessage(`Selected article: ${title || link}. If the embedded page is blocked, use the article window or Open article.`, "ok");
+      showMessage(`Selected: ${articleId || title || link}`, "ok");
     }
 
     function restoreRosterCache() {
@@ -1018,7 +1060,11 @@
 
     function showMessage(message, level) {
       els.message.textContent = message;
-      els.message.style.borderLeftColor = level === "ok" ? "var(--green)" : level === "error" ? "var(--red)" : "var(--amber)";
+      els.message.className = `toast ${level === "ok" ? "ok" : level === "error" ? "error" : ""}`;
+      window.clearTimeout(messageTimer);
+      messageTimer = window.setTimeout(() => {
+        els.message.classList.add("hidden");
+      }, level === "error" ? 6000 : 3000);
       if (level === "error") {
         els.status.textContent = "Setup needed";
         els.status.className = "status error";
