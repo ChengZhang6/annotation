@@ -396,34 +396,53 @@
       --left-pane: 50%;
       height: 100%;
       display: grid;
-      grid-template-columns: minmax(260px, var(--left-pane)) 6px minmax(360px, 1fr);
+      grid-template-columns: minmax(260px, var(--left-pane)) 14px minmax(360px, 1fr);
       gap: 0;
     }
 
     .pane-divider {
-      width: 6px;
-      min-width: 6px;
+      width: 14px;
+      min-width: 14px;
       cursor: col-resize;
       border: 0;
       background: transparent;
       position: relative;
       z-index: 6;
+      touch-action: none;
     }
 
     .pane-divider::before {
       content: "";
       position: absolute;
-      top: 0;
-      bottom: 0;
-      left: 2px;
-      width: 2px;
+      top: 8px;
+      bottom: 8px;
+      left: 6px;
+      width: 3px;
       border-radius: 999px;
-      background: transparent;
+      background: rgba(174, 183, 192, 0.55);
     }
 
     .pane-divider:hover::before,
     .pane-divider.dragging::before {
       background: var(--green);
+    }
+
+    .pane-divider::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 7px;
+      height: 42px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.92);
+      border: 1px solid var(--line);
+      box-shadow: 0 2px 8px rgba(32, 35, 39, 0.14);
+      transform: translate(-50%, -50%);
+    }
+
+    body.resizing-panes iframe {
+      pointer-events: none;
     }
 
     .viewer-pane {
@@ -1305,14 +1324,17 @@
     function startPaneResize(event) {
       event.preventDefault();
       els["pane-divider"].classList.add("dragging");
+      document.body.classList.add("resizing-panes");
       const grid = document.querySelector(".viewer-grid");
+      const rect = grid.getBoundingClientRect();
       const update = (moveEvent) => {
-        const rect = grid.getBoundingClientRect();
-        const percent = ((moveEvent.clientX - rect.left) / rect.width) * 100;
+        const dividerOffset = els["pane-divider"].offsetWidth / 2;
+        const percent = ((moveEvent.clientX - rect.left - dividerOffset) / rect.width) * 100;
         setPaneSplit(percent);
       };
       const stop = () => {
         els["pane-divider"].classList.remove("dragging");
+        document.body.classList.remove("resizing-panes");
         window.removeEventListener("pointermove", update);
         window.removeEventListener("pointerup", stop);
       };
