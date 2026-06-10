@@ -1199,7 +1199,6 @@
       ["article-refresh", "tab-form", "tab-editor"].forEach((id) => {
         els[id].disabled = useDiscussion;
       });
-      els["article-open-link"].setAttribute("aria-disabled", String(useDiscussion));
       els["form-open-link"].setAttribute("aria-disabled", String(useDiscussion));
       els["jump-id"].placeholder = useDiscussion ? "A109-C01" : "A050";
     }
@@ -1542,6 +1541,7 @@
       els["article-frame-link"].textContent = link;
       els["article-frame-link"].title = link;
       els["article-open-link"].href = link;
+      els["article-open-link"].setAttribute("aria-disabled", "false");
       els["article-frame"].src = link;
       if (openExternal) {
         window.open(link, "cdcf_article_window", "noopener");
@@ -1741,6 +1741,8 @@
       els["article-frame-title"].title = "";
       els["article-frame-link"].textContent = "";
       els["article-frame-link"].title = "";
+      els["article-open-link"].removeAttribute("href");
+      els["article-open-link"].setAttribute("aria-disabled", "true");
       els["article-frame"].src = "about:blank";
       els["article-frame"].srcdoc = `
         <!doctype html>
@@ -1763,6 +1765,7 @@
       els["article-frame-link"].textContent = "";
       els["article-frame-link"].title = "";
       els["article-open-link"].removeAttribute("href");
+      els["article-open-link"].setAttribute("aria-disabled", "true");
       els["article-frame"].src = "about:blank";
       els["article-frame"].srcdoc = `
         <!doctype html>
@@ -1786,6 +1789,7 @@
       els["article-frame-link"].textContent = discussionCase.caseId || "";
       els["article-frame-link"].title = discussionCase.caseId || "";
       els["article-open-link"].href = discussionCase.link || "#";
+      els["article-open-link"].setAttribute("aria-disabled", String(!discussionCase.link));
       els["article-frame"].src = "about:blank";
       els["article-frame"].srcdoc = `
         <!doctype html>
@@ -1810,6 +1814,7 @@
       els["article-frame-link"].textContent = discussionCase.caseId || "";
       els["article-frame-link"].title = discussionCase.caseId || "";
       els["article-open-link"].href = discussionCase.link || "#";
+      els["article-open-link"].setAttribute("aria-disabled", String(!discussionCase.link));
       els["article-frame"].src = "about:blank";
       els["article-frame"].srcdoc = `
         <!doctype html>
