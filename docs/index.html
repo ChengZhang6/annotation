@@ -601,6 +601,10 @@
       right: 0;
     }
 
+    body[data-mode="discussion"] .viewer-toolbar.compact {
+      display: none;
+    }
+
     .viewer-toolbar.compact .viewer-actions,
     .article-toolbar .viewer-actions {
       gap: 8px;
@@ -667,13 +671,20 @@
       line-height: 1.55;
     }
 
-    .discussion-placeholder {
-      display: grid;
-      place-items: center;
-      padding: 24px;
+    .discussion-panel {
+      height: 100%;
+      overflow: auto;
+      padding: 12px 12px 48px;
       border: 1px solid var(--line);
       border-radius: 8px;
       background: #ffffff;
+    }
+
+    .discussion-empty {
+      display: grid;
+      place-items: center;
+      min-height: 100%;
+      padding: 24px;
       color: var(--muted);
       font-size: 13px;
       text-align: center;
@@ -722,6 +733,71 @@
     .zoom-readout {
       min-width: 46px;
       color: var(--muted);
+    }
+
+    .diff-card {
+      display: grid;
+      gap: 12px;
+      max-width: 760px;
+      margin: 0 auto;
+    }
+
+    .diff-nav {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      justify-self: start;
+      padding: 3px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.94);
+      box-shadow: 0 4px 12px rgba(32, 35, 39, 0.08);
+    }
+
+    .diff-nav button {
+      min-width: 28px;
+      min-height: 24px;
+      border-radius: 6px;
+      padding: 0 7px;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .diff-count {
+      min-width: 58px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 750;
+      text-align: center;
+    }
+
+    .diff-attribute {
+      font-size: 16px;
+      font-weight: 800;
+      line-height: 1.3;
+    }
+
+    .answer-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .answer-box {
+      min-height: 120px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      background: #fbfcfd;
+      overflow-wrap: anywhere;
+      white-space: pre-wrap;
+    }
+
+    .answer-box strong {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--muted);
+      font-size: 12px;
     }
 
     @media (max-width: 860px) {
@@ -850,8 +926,25 @@
             <div id="editor-panel" class="tab-panel editor-panel hidden">
               <textarea id="clean-text-editor" class="editor-textarea" autocomplete="off" spellcheck="true" placeholder="Paste and edit clean text here"></textarea>
             </div>
-            <div id="discussion-panel" class="tab-panel discussion-placeholder hidden">
-              Discussion data will load from Form Responses 1 in the next step.
+            <div id="discussion-panel" class="tab-panel discussion-panel hidden">
+              <div id="discussion-empty" class="discussion-empty">Sign in to load discussion cases.</div>
+              <div id="discussion-diff-card" class="diff-card hidden">
+                <div class="diff-nav" aria-label="Diff navigation">
+                  <button id="diff-prev" type="button" aria-label="Previous diff">&lsaquo;</button>
+                  <div id="diff-count" class="diff-count">0 / 0</div>
+                  <button id="diff-next" type="button" aria-label="Next diff">&rsaquo;</button>
+                </div>
+                <div id="diff-attribute" class="diff-attribute"></div>
+                <div class="answer-grid">
+                  <div id="cheng-answer" class="answer-box"><strong>Cheng</strong></div>
+                  <div id="briana-answer" class="answer-box"><strong>Briana</strong></div>
+                </div>
+                <label>
+                  Discussion / final notes
+                  <textarea id="discussion-note" autocomplete="off" spellcheck="true" placeholder="Save will be connected in the next step." disabled></textarea>
+                </label>
+                <button id="discussion-save" class="primary" type="button" disabled>Save</button>
+              </div>
             </div>
             <div class="zoom-controls" aria-label="Right pane zoom">
               <button id="right-zoom-out" type="button" aria-label="Zoom right pane out">-</button>
@@ -885,8 +978,12 @@
     let rosterRows = [];
     let currentRosterIndex = -1;
     let discussionCases = [];
+    let discussionResponsesByCaseId = new Map();
     let currentDiscussionIndex = -1;
     let discussionHeaders = [];
+    let discussionAttributeStartIndex = -1;
+    let currentDiscussionDiffs = [];
+    let currentDiscussionDiffIndex = 0;
     let messageTimer = 0;
     let zoomState = { article: 1, right: 1 };
     let currentMode = "annotation";
@@ -925,6 +1022,16 @@
       "form-frame",
       "editor-panel",
       "discussion-panel",
+      "discussion-empty",
+      "discussion-diff-card",
+      "diff-prev",
+      "diff-next",
+      "diff-count",
+      "diff-attribute",
+      "cheng-answer",
+      "briana-answer",
+      "discussion-note",
+      "discussion-save",
       "clean-text-editor",
       "right-zoom-out",
       "right-zoom-reset",
@@ -965,6 +1072,8 @@
       els["right-zoom-out"].addEventListener("click", () => changePaneZoom("right", -0.1));
       els["right-zoom-in"].addEventListener("click", () => changePaneZoom("right", 0.1));
       els["right-zoom-reset"].addEventListener("click", () => setPaneZoom("right", 1));
+      els["diff-prev"].addEventListener("click", () => moveDiscussionDiff(-1));
+      els["diff-next"].addEventListener("click", () => moveDiscussionDiff(1));
       els["pane-divider"].addEventListener("pointerdown", startPaneResize);
       els["pane-divider"].addEventListener("dblclick", () => setPaneSplit(50));
       restorePaneZoom();
@@ -1198,6 +1307,7 @@
         } else {
           showDiscussionPlaceholder();
           showDiscussionRightPlaceholder();
+          showDiscussionEmpty("No Cheng discussion cases found.");
         }
         showMessage(`Loaded ${discussionCases.length} Cheng discussion case(s).`, "ok");
       } catch (error) {
@@ -1226,6 +1336,8 @@
     function parseDiscussionCases(rows) {
       if (!rows.length) {
         discussionHeaders = [];
+        discussionResponsesByCaseId = new Map();
+        discussionAttributeStartIndex = -1;
         return [];
       }
       discussionHeaders = rows[0].map((header) => String(header || "").trim());
@@ -1235,11 +1347,15 @@
       const titleIndex = findHeaderIndex(headers, ["article_title", "title", "articletitle"]);
       const cleanTextIndex = findHeaderIndex(headers, ["drop_in_article_text", "clean_text", "article_text"]);
       const linkIndex = findHeaderIndex(headers, ["link_to_article", "article_link", "link", "url"]);
+      discussionAttributeStartIndex = findHeaderIndex(headers, ["year_drowning_occurred"]);
       if (caseIdIndex === -1) {
         throw new Error(`${RESPONSE_TAB_NAME} is missing a caseID column.`);
       }
+      if (discussionAttributeStartIndex === -1) {
+        throw new Error(`${RESPONSE_TAB_NAME} is missing a Year drowning occurred column.`);
+      }
 
-      return rows.slice(1)
+      const responses = rows.slice(1)
         .map((row, offset) => ({
           rowNumber: offset + 2,
           articleId: cellValue(row, articleIdIndex),
@@ -1249,7 +1365,13 @@
           link: cellValue(row, linkIndex),
           values: row
         }))
-        .filter((row) => row.caseId && !isBrianaCaseId(row.caseId));
+        .filter((row) => row.caseId);
+
+      discussionResponsesByCaseId = new Map();
+      responses.forEach((row) => {
+        discussionResponsesByCaseId.set(normalizeCaseId(row.caseId), row);
+      });
+      return responses.filter((row) => !isBrianaCaseId(row.caseId));
     }
 
     function parseRosterRows(rows) {
@@ -1351,8 +1473,8 @@
       currentDiscussionIndex = boundedIndex;
       els["article-select"].value = String(boundedIndex);
       els["jump-id"].value = discussionCase.caseId || "";
-      showDiscussionCasePlaceholder(discussionCase);
-      showDiscussionRightPlaceholder();
+      showDiscussionCaseContent(discussionCase);
+      renderDiscussionDiffs(discussionCase);
       updateDiscussionPosition();
     }
 
@@ -1662,6 +1784,122 @@
       `;
     }
 
+    function showDiscussionCaseContent(discussionCase) {
+      const title = discussionCase.title || discussionCase.caseId || "Discussion case";
+      const cleanText = discussionCase.cleanText || "No clean article text found for this case.";
+      els["article-frame-title"].textContent = title;
+      els["article-frame-title"].title = title;
+      els["article-frame-link"].textContent = discussionCase.caseId || "";
+      els["article-frame-link"].title = discussionCase.caseId || "";
+      els["article-open-link"].href = discussionCase.link || "#";
+      els["article-frame"].src = "about:blank";
+      els["article-frame"].srcdoc = `
+        <!doctype html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <style>
+              body {
+                margin: 0;
+                background: #fff;
+                color: #202327;
+                font: 16px/1.6 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+              }
+              main {
+                max-width: 820px;
+                margin: 0 auto;
+                padding: 34px 38px 80px;
+              }
+              h1 {
+                margin: 0 0 18px;
+                font-size: 24px;
+                line-height: 1.25;
+              }
+              pre {
+                margin: 0;
+                white-space: pre-wrap;
+                overflow-wrap: anywhere;
+                font: inherit;
+              }
+            </style>
+          </head>
+          <body>
+            <main>
+              <h1>${escapeHtml(title)}</h1>
+              <pre>${escapeHtml(cleanText)}</pre>
+            </main>
+          </body>
+        </html>
+      `;
+    }
+
+    function renderDiscussionDiffs(discussionCase) {
+      const brianaCase = discussionResponsesByCaseId.get(toBrianaCaseId(discussionCase.caseId));
+      if (!brianaCase) {
+        showDiscussionEmpty("No Briana response for this case.");
+        return;
+      }
+
+      currentDiscussionDiffs = buildDiscussionDiffs(discussionCase, brianaCase);
+      currentDiscussionDiffIndex = 0;
+      if (!currentDiscussionDiffs.length) {
+        showDiscussionEmpty("No differences found.");
+        return;
+      }
+      renderCurrentDiscussionDiff();
+    }
+
+    function buildDiscussionDiffs(chengCase, brianaCase) {
+      const diffs = [];
+      for (let index = discussionAttributeStartIndex; index < discussionHeaders.length; index += 1) {
+        const attribute = discussionHeaders[index] || `Column ${index + 1}`;
+        const chengAnswer = cellValue(chengCase.values, index);
+        const brianaAnswer = cellValue(brianaCase.values, index);
+        if (chengAnswer !== brianaAnswer) {
+          diffs.push({
+            index,
+            attribute,
+            chengAnswer,
+            brianaAnswer
+          });
+        }
+      }
+      return diffs;
+    }
+
+    function renderCurrentDiscussionDiff() {
+      const diff = currentDiscussionDiffs[currentDiscussionDiffIndex];
+      if (!diff) {
+        showDiscussionEmpty("No differences found.");
+        return;
+      }
+      els["discussion-empty"].classList.add("hidden");
+      els["discussion-diff-card"].classList.remove("hidden");
+      els["diff-count"].textContent = `${currentDiscussionDiffIndex + 1} / ${currentDiscussionDiffs.length}`;
+      els["diff-attribute"].textContent = diff.attribute;
+      els["cheng-answer"].innerHTML = `<strong>Cheng</strong>${escapeHtml(diff.chengAnswer || "(blank)")}`;
+      els["briana-answer"].innerHTML = `<strong>Briana</strong>${escapeHtml(diff.brianaAnswer || "(blank)")}`;
+      els["discussion-note"].value = "";
+      els["diff-prev"].disabled = currentDiscussionDiffs.length <= 1;
+      els["diff-next"].disabled = currentDiscussionDiffs.length <= 1;
+    }
+
+    function moveDiscussionDiff(delta) {
+      if (!currentDiscussionDiffs.length) {
+        return;
+      }
+      currentDiscussionDiffIndex = (currentDiscussionDiffIndex + delta + currentDiscussionDiffs.length) % currentDiscussionDiffs.length;
+      renderCurrentDiscussionDiff();
+    }
+
+    function showDiscussionEmpty(message) {
+      currentDiscussionDiffs = [];
+      currentDiscussionDiffIndex = 0;
+      els["discussion-empty"].textContent = message;
+      els["discussion-empty"].classList.remove("hidden");
+      els["discussion-diff-card"].classList.add("hidden");
+    }
+
     function showDiscussionRightPlaceholder() {
       els["tab-form"].classList.remove("active");
       els["tab-editor"].classList.remove("active");
@@ -1670,6 +1908,9 @@
       els["form-frame"].classList.add("hidden");
       els["editor-panel"].classList.add("hidden");
       els["discussion-panel"].classList.remove("hidden");
+      if (!currentDiscussionCase()) {
+        showDiscussionEmpty(accessToken ? "Select a discussion case." : "Sign in to load discussion cases.");
+      }
     }
 
     function loadFormFrame() {
@@ -1725,6 +1966,11 @@
 
     function isBrianaCaseId(value) {
       return normalizeCaseId(value).startsWith("B-");
+    }
+
+    function toBrianaCaseId(value) {
+      const caseId = normalizeCaseId(value);
+      return caseId.startsWith("B-") ? caseId : `B-${caseId}`;
     }
 
     function cellValue(row, index) {
