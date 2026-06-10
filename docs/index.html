@@ -1166,7 +1166,7 @@
         const cachedIndex = Number.isInteger(cached.currentIndex) ? cached.currentIndex : 0;
         selectArticleByIndex(cachedIndex, false);
         const savedAt = cached.savedAt ? new Date(cached.savedAt).toLocaleString() : "";
-        showMessage(`Restored ${rosterRows.length} cached article(s)${savedAt ? ` from ${savedAt}` : ""}. Click Load roster to refresh from Google Sheets.`, "ok");
+        showMessage(`Restored ${rosterRows.length} cached article(s)${savedAt ? ` from ${savedAt}` : ""}. Google Sheets will refresh after sign-in.`, "ok");
       } catch {
         localStorage.removeItem(ROSTER_CACHE_KEY);
       }
@@ -1336,7 +1336,7 @@
             <div style="height:100vh;display:grid;place-items:center;text-align:center;padding:24px;">
               <div>
                 <strong style="display:block;color:#202327;margin-bottom:8px;">No article selected</strong>
-                Sign in, click Load roster, then choose an article row.
+                Sign in to refresh the roster, then choose an article row.
               </div>
             </div>
           </body>
