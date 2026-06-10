@@ -124,18 +124,46 @@
 
     .brand {
       flex: 0 0 auto;
-      display: grid;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
       z-index: 11;
     }
 
-    h1 {
+    .brand-title {
       margin: 0;
       font-size: 15px;
+      font-weight: 800;
       line-height: 1.1;
     }
 
-    .brand .subtle {
-      display: none;
+    .mode-switch {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 3px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.92);
+      box-shadow: 0 4px 12px rgba(32, 35, 39, 0.08);
+    }
+
+    .mode-button {
+      min-height: 24px;
+      border-color: transparent;
+      border-radius: 6px;
+      background: transparent;
+      padding: 0 8px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 750;
+    }
+
+    .mode-button.active {
+      background: var(--panel);
+      border-color: var(--line);
+      color: var(--green);
+      box-shadow: 0 1px 3px rgba(32, 35, 39, 0.08);
     }
 
     .subtle {
@@ -605,6 +633,12 @@
       text-decoration: underline;
     }
 
+    a[aria-disabled="true"] {
+      pointer-events: none;
+      opacity: 0.55;
+      text-decoration: none;
+    }
+
     .right-content {
       position: relative;
       min-height: 0;
@@ -631,6 +665,18 @@
       border-color: var(--line);
       padding-top: 42px;
       line-height: 1.55;
+    }
+
+    .discussion-placeholder {
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #ffffff;
+      color: var(--muted);
+      font-size: 13px;
+      text-align: center;
     }
 
     iframe {
@@ -727,8 +773,11 @@
 <body>
   <header class="topbar">
     <div class="brand">
-      <h1>CDCF Annotation</h1>
-      <div class="subtle">Google login writes to the shared spreadsheet.</div>
+      <div class="brand-title">CDCF</div>
+      <div class="mode-switch" role="tablist" aria-label="Mode">
+        <button id="mode-annotation" class="mode-button active" type="button" role="tab" aria-selected="true">Annotation</button>
+        <button id="mode-discussion" class="mode-button" type="button" role="tab" aria-selected="false">Discussion</button>
+      </div>
     </div>
     <div class="controlbar" aria-label="Article roster controls">
       <input id="client-id" class="hidden" autocomplete="off">
@@ -801,6 +850,9 @@
             <div id="editor-panel" class="tab-panel editor-panel hidden">
               <textarea id="clean-text-editor" class="editor-textarea" autocomplete="off" spellcheck="true" placeholder="Paste and edit clean text here"></textarea>
             </div>
+            <div id="discussion-panel" class="tab-panel discussion-placeholder hidden">
+              Discussion data will load from Form Responses 1 in the next step.
+            </div>
             <div class="zoom-controls" aria-label="Right pane zoom">
               <button id="right-zoom-out" type="button" aria-label="Zoom right pane out">-</button>
               <button id="right-zoom-reset" class="zoom-readout" type="button" aria-label="Reset right pane zoom">100%</button>
@@ -824,6 +876,7 @@
     const RIGHT_TAB_KEY = "cdcf-right-tab";
     const ZOOM_CACHE_KEY = "cdcf-pane-zoom";
     const SPLIT_CACHE_KEY = "cdcf-pane-split";
+    const MODE_CACHE_KEY = "cdcf-mode";
     const SCOPE = "https://www.googleapis.com/auth/spreadsheets";
     let accessToken = "";
     let tokenClient = null;
@@ -832,11 +885,14 @@
     let currentRosterIndex = -1;
     let messageTimer = 0;
     let zoomState = { article: 1, right: 1 };
+    let currentMode = "annotation";
 
     const els = {};
     [
       "status",
       "sign-in",
+      "mode-annotation",
+      "mode-discussion",
       "client-id",
       "spreadsheet-id",
       "roster-tab-name",
@@ -864,6 +920,7 @@
       "right-content",
       "form-frame",
       "editor-panel",
+      "discussion-panel",
       "clean-text-editor",
       "right-zoom-out",
       "right-zoom-reset",
@@ -882,6 +939,8 @@
       els["form-url"].value = config.formUrl || FORM_URL;
 
       els["sign-in"].addEventListener("click", signIn);
+      els["mode-annotation"].addEventListener("click", () => setMode("annotation"));
+      els["mode-discussion"].addEventListener("click", () => setMode("discussion"));
       els["article-select"].addEventListener("change", () => selectArticleByIndex(Number(els["article-select"].value), false));
       els["jump-go"].addEventListener("click", jumpToArticle);
       els["jump-id"].addEventListener("keydown", (event) => {
@@ -910,6 +969,7 @@
       loadFormFrame();
       setRightTab(localStorage.getItem(RIGHT_TAB_KEY) === "editor" ? "editor" : "form");
       restoreRosterCache();
+      setMode(localStorage.getItem(MODE_CACHE_KEY) === "discussion" ? "discussion" : "annotation", false);
       window.setTimeout(trySilentSignIn, 600);
     }
 
@@ -935,6 +995,55 @@
         rosterTabName: els["roster-tab-name"].value.trim() || "article_roster",
         formUrl: els["form-url"].value.trim() || FORM_URL
       };
+    }
+
+    function setMode(mode, persist = true) {
+      const nextMode = mode === "discussion" ? "discussion" : "annotation";
+      currentMode = nextMode;
+      document.body.dataset.mode = nextMode;
+      const useDiscussion = nextMode === "discussion";
+      els["mode-annotation"].classList.toggle("active", !useDiscussion);
+      els["mode-discussion"].classList.toggle("active", useDiscussion);
+      els["mode-annotation"].setAttribute("aria-selected", String(!useDiscussion));
+      els["mode-discussion"].setAttribute("aria-selected", String(useDiscussion));
+      if (persist) {
+        localStorage.setItem(MODE_CACHE_KEY, nextMode);
+      }
+
+      setAnnotationControlsDisabled(useDiscussion);
+      if (useDiscussion) {
+        saveCurrentEditorDraft();
+        showDiscussionPlaceholder();
+        showDiscussionRightPlaceholder();
+        return;
+      }
+
+      els["discussion-panel"].classList.add("hidden");
+      loadFormFrame();
+      setRightTab(localStorage.getItem(RIGHT_TAB_KEY) === "editor" ? "editor" : "form");
+      const article = currentArticle();
+      if (article) {
+        loadArticleFrame(article.link, article.title || article.id, false, article.id);
+      } else {
+        showArticlePlaceholder();
+      }
+    }
+
+    function setAnnotationControlsDisabled(disabled) {
+      [
+        "article-select",
+        "jump-id",
+        "jump-go",
+        "nav-prev",
+        "nav-next",
+        "article-refresh",
+        "tab-form",
+        "tab-editor"
+      ].forEach((id) => {
+        els[id].disabled = disabled;
+      });
+      els["article-open-link"].setAttribute("aria-disabled", String(disabled));
+      els["form-open-link"].setAttribute("aria-disabled", String(disabled));
     }
 
     function signIn() {
@@ -978,7 +1087,11 @@
               ? "Google sign-in restored. You can read and write the shared sheet."
               : "Signed in. Google will use this user's permission to write the sheet.";
             showMessage(message, "ok");
-            loadRosterRows();
+            if (currentMode === "annotation") {
+              loadRosterRows();
+            } else {
+              showMessage(`${message} Discussion data loading will be added next.`, "ok");
+            }
           }
         });
       }
@@ -1186,6 +1299,10 @@
     }
 
     function setRightTab(tabName) {
+      if (currentMode === "discussion") {
+        showDiscussionRightPlaceholder();
+        return;
+      }
       const useEditor = tabName === "editor";
       els["tab-form"].classList.toggle("active", !useEditor);
       els["tab-editor"].classList.toggle("active", useEditor);
@@ -1270,7 +1387,7 @@
       const zoom = zoomState[pane];
       const targets = pane === "article"
         ? [els["article-frame"]]
-        : [els["form-frame"], els["editor-panel"]];
+        : [els["form-frame"], els["editor-panel"], els["discussion-panel"]];
       targets.forEach((target) => {
         target.style.width = `${100 / zoom}%`;
         target.style.height = `${100 / zoom}%`;
@@ -1342,6 +1459,38 @@
           </body>
         </html>
       `;
+    }
+
+    function showDiscussionPlaceholder() {
+      els["article-frame-title"].textContent = "Discussion mode";
+      els["article-frame-title"].title = "Discussion mode";
+      els["article-frame-link"].textContent = "";
+      els["article-frame-link"].title = "";
+      els["article-open-link"].removeAttribute("href");
+      els["article-frame"].src = "about:blank";
+      els["article-frame"].srcdoc = `
+        <!doctype html>
+        <html>
+          <body style="margin:0;font:14px system-ui,sans-serif;color:#66717d;background:#fff;">
+            <div style="height:100vh;display:grid;place-items:center;text-align:center;padding:24px;">
+              <div>
+                <strong style="display:block;color:#202327;margin-bottom:8px;">Discussion mode</strong>
+                Next step: load Cheng cases from Form Responses 1 and show clean article text here.
+              </div>
+            </div>
+          </body>
+        </html>
+      `;
+    }
+
+    function showDiscussionRightPlaceholder() {
+      els["tab-form"].classList.remove("active");
+      els["tab-editor"].classList.remove("active");
+      els["tab-form"].setAttribute("aria-selected", "false");
+      els["tab-editor"].setAttribute("aria-selected", "false");
+      els["form-frame"].classList.add("hidden");
+      els["editor-panel"].classList.add("hidden");
+      els["discussion-panel"].classList.remove("hidden");
     }
 
     function loadFormFrame() {
