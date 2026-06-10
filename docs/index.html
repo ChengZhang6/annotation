@@ -928,6 +928,17 @@
             </div>
             <div id="discussion-panel" class="tab-panel discussion-panel hidden">
               <div id="discussion-empty" class="discussion-empty">Sign in to load discussion cases.</div>
+              <div id="discussion-manual-card" class="diff-card hidden">
+                <label>
+                  Attribute
+                  <select id="manual-attribute-select"></select>
+                </label>
+                <label>
+                  Discussion / final notes
+                  <textarea id="manual-discussion-note" autocomplete="off" spellcheck="true"></textarea>
+                </label>
+                <button id="manual-discussion-save" class="primary" type="button">Save</button>
+              </div>
               <div id="discussion-diff-card" class="diff-card hidden">
                 <div class="diff-nav" aria-label="Diff navigation">
                   <button id="diff-prev" type="button" aria-label="Previous diff">&lsaquo;</button>
@@ -941,7 +952,7 @@
                 </div>
                 <label>
                   Discussion / final notes
-                  <textarea id="discussion-note" autocomplete="off" spellcheck="true" placeholder="Save will be connected in the next step." disabled></textarea>
+                  <textarea id="discussion-note" autocomplete="off" spellcheck="true" placeholder="Enter discussion note or final decision." disabled></textarea>
                 </label>
                 <button id="discussion-save" class="primary" type="button" disabled>Save</button>
               </div>
@@ -964,6 +975,7 @@
     const SPREADSHEET_ID = "1gNt24it0OKAaxJJb-pyXDtpd0PmfT3H1irdJUk-lPEk";
     const FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSdqQa1bmu-sLxzmfuK5-e0Jf83uIIXLZJPaWsngEUJ6alXTqw/viewform?usp=header";
     const RESPONSE_TAB_NAME = "Form Responses 1";
+    const DISCUSSION_TAB_NAME = "discussion";
     const STORAGE_KEY = "cdcf-simple-config";
     const ROSTER_CACHE_KEY = "cdcf-roster-cache";
     const EDITOR_CACHE_KEY = "cdcf-editor-cache";
@@ -1023,6 +1035,10 @@
       "editor-panel",
       "discussion-panel",
       "discussion-empty",
+      "discussion-manual-card",
+      "manual-attribute-select",
+      "manual-discussion-note",
+      "manual-discussion-save",
       "discussion-diff-card",
       "diff-prev",
       "diff-next",
@@ -1074,6 +1090,8 @@
       els["right-zoom-reset"].addEventListener("click", () => setPaneZoom("right", 1));
       els["diff-prev"].addEventListener("click", () => moveDiscussionDiff(-1));
       els["diff-next"].addEventListener("click", () => moveDiscussionDiff(1));
+      els["discussion-save"].addEventListener("click", saveDiscussionNote);
+      els["manual-discussion-save"].addEventListener("click", saveManualDiscussionNote);
       els["pane-divider"].addEventListener("pointerdown", startPaneResize);
       els["pane-divider"].addEventListener("dblclick", () => setPaneSplit(50));
       restorePaneZoom();
@@ -1874,12 +1892,15 @@
         return;
       }
       els["discussion-empty"].classList.add("hidden");
+      els["discussion-manual-card"].classList.add("hidden");
       els["discussion-diff-card"].classList.remove("hidden");
       els["diff-count"].textContent = `${currentDiscussionDiffIndex + 1} / ${currentDiscussionDiffs.length}`;
       els["diff-attribute"].textContent = diff.attribute;
       els["cheng-answer"].innerHTML = `<strong>Cheng</strong>${escapeHtml(diff.chengAnswer || "(blank)")}`;
       els["briana-answer"].innerHTML = `<strong>Briana</strong>${escapeHtml(diff.brianaAnswer || "(blank)")}`;
       els["discussion-note"].value = "";
+      els["discussion-note"].disabled = false;
+      els["discussion-save"].disabled = false;
       els["diff-prev"].disabled = currentDiscussionDiffs.length <= 1;
       els["diff-next"].disabled = currentDiscussionDiffs.length <= 1;
     }
@@ -1892,12 +1913,159 @@
       renderCurrentDiscussionDiff();
     }
 
+    async function saveDiscussionNote() {
+      const discussionCase = currentDiscussionCase();
+      const diff = currentDiscussionDiffs[currentDiscussionDiffIndex];
+      const note = els["discussion-note"].value.trim();
+      if (!discussionCase || !diff) {
+        showMessage("Select a discussion diff before saving.", "warn");
+        return;
+      }
+      if (!note) {
+        showMessage("Enter a note before saving.", "warn");
+        return;
+      }
+
+      els["discussion-save"].disabled = true;
+      try {
+        await saveDiscussionAttributeNote(discussionCase.caseId, diff.attribute, note);
+        showMessage(`Saved ${discussionCase.caseId} ${discussionNoteHeader(diff.attribute)}.`, "ok");
+      } catch (error) {
+        showMessage(error.message, "error");
+      } finally {
+        els["discussion-save"].disabled = false;
+      }
+    }
+
+    async function saveManualDiscussionNote() {
+      const discussionCase = currentDiscussionCase();
+      const attribute = els["manual-attribute-select"].value;
+      const note = els["manual-discussion-note"].value.trim();
+      if (!discussionCase) {
+        showMessage("Select a discussion case before saving.", "warn");
+        return;
+      }
+      if (!attribute) {
+        showMessage("Select an attribute before saving.", "warn");
+        return;
+      }
+      if (!note) {
+        showMessage("Enter a note before saving.", "warn");
+        return;
+      }
+
+      els["manual-discussion-save"].disabled = true;
+      try {
+        await saveDiscussionAttributeNote(discussionCase.caseId, attribute, note);
+        showMessage(`Saved ${discussionCase.caseId} ${discussionNoteHeader(attribute)}.`, "ok");
+      } catch (error) {
+        showMessage(error.message, "error");
+      } finally {
+        els["manual-discussion-save"].disabled = false;
+      }
+    }
+
+    async function saveDiscussionAttributeNote(caseId, attribute, note) {
+      requireToken();
+      const headers = await ensureDiscussionHeaders();
+      const targetHeader = discussionNoteHeader(attribute);
+      const targetColumnIndex = headers.indexOf(targetHeader);
+      if (targetColumnIndex === -1) {
+        throw new Error(`Discussion header not found: ${targetHeader}`);
+      }
+
+      const rows = await readDiscussionRows();
+      const existingOffset = rows.slice(1).findIndex((row) => normalizeCaseId(row[0]) === normalizeCaseId(caseId));
+      const targetRowNumber = existingOffset >= 0 ? existingOffset + 2 : Math.max(rows.length + 1, 2);
+      if (existingOffset >= 0) {
+        const cell = `${columnName(targetColumnIndex + 1)}${targetRowNumber}`;
+        await updateSheetValues(`${quoteSheet(DISCUSSION_TAB_NAME)}!${cell}`, [[note]]);
+      } else {
+        const rowValues = Array(targetColumnIndex + 1).fill("");
+        rowValues[0] = caseId;
+        rowValues[targetColumnIndex] = note;
+        await updateSheetValues(`${quoteSheet(DISCUSSION_TAB_NAME)}!A${targetRowNumber}:${columnName(targetColumnIndex + 1)}${targetRowNumber}`, [rowValues]);
+      }
+    }
+
+    async function ensureDiscussionHeaders() {
+      await ensureDiscussionSheetExists();
+      const desiredHeaders = desiredDiscussionHeaders();
+      const rows = await readDiscussionRows("A1:ZZ1");
+      const existingHeaders = (rows[0] || []).map((header) => String(header || "").trim());
+      const hasExistingHeaders = existingHeaders.some(Boolean);
+      const headers = hasExistingHeaders ? existingHeaders.slice() : desiredHeaders.slice();
+      headers[0] = "caseID";
+      desiredHeaders.slice(1).forEach((header) => {
+        if (!headers.includes(header)) {
+          headers.push(header);
+        }
+      });
+      await updateSheetValues(`${quoteSheet(DISCUSSION_TAB_NAME)}!A1:${columnName(headers.length)}1`, [headers]);
+      return headers;
+    }
+
+    async function ensureDiscussionSheetExists() {
+      const metadata = await sheetsFetch("?fields=sheets.properties.title");
+      const sheets = metadata.sheets || [];
+      const exists = sheets.some((sheet) => sheet.properties && sheet.properties.title === DISCUSSION_TAB_NAME);
+      if (exists) {
+        return;
+      }
+      await sheetsFetch(":batchUpdate", {
+        method: "POST",
+        body: JSON.stringify({
+          requests: [
+            {
+              addSheet: {
+                properties: {
+                  title: DISCUSSION_TAB_NAME
+                }
+              }
+            }
+          ]
+        })
+      });
+    }
+
+    async function readDiscussionRows(range = "A1:ZZ1000") {
+      const data = await sheetsFetch(`/values/${encodeURIComponent(`${quoteSheet(DISCUSSION_TAB_NAME)}!${range}`)}`);
+      return data.values || [];
+    }
+
+    async function updateSheetValues(range, values) {
+      return sheetsFetch(`/values/${encodeURIComponent(range)}?valueInputOption=RAW`, {
+        method: "PUT",
+        body: JSON.stringify({ values })
+      });
+    }
+
+    function desiredDiscussionHeaders() {
+      return [
+        "caseID",
+        ...discussionHeaders.slice(discussionAttributeStartIndex).map(discussionNoteHeader)
+      ];
+    }
+
     function showDiscussionEmpty(message) {
       currentDiscussionDiffs = [];
       currentDiscussionDiffIndex = 0;
       els["discussion-empty"].textContent = message;
       els["discussion-empty"].classList.remove("hidden");
       els["discussion-diff-card"].classList.add("hidden");
+      const hasManualAttributes = renderManualDiscussionAttributes();
+      els["discussion-manual-card"].classList.toggle("hidden", !currentDiscussionCase() || !hasManualAttributes);
+      els["manual-discussion-note"].value = "";
+      els["discussion-note"].disabled = true;
+      els["discussion-save"].disabled = true;
+    }
+
+    function renderManualDiscussionAttributes() {
+      const attributes = discussionHeaders.slice(Math.max(discussionAttributeStartIndex, 0));
+      els["manual-attribute-select"].innerHTML = attributes.map((attribute) => (
+        `<option value="${escapeHtml(attribute)}">${escapeHtml(attribute)}</option>`
+      )).join("");
+      return attributes.length > 0;
     }
 
     function showDiscussionRightPlaceholder() {
@@ -1978,6 +2146,25 @@
         return "";
       }
       return String(row[index] || "").trim();
+    }
+
+    function discussionNoteHeader(attribute) {
+      const clean = String(attribute || "attribute")
+        .trim()
+        .replace(/[^A-Za-z0-9]+/g, "_")
+        .replace(/^_+|_+$/g, "");
+      return `notes_${clean || "attribute"}`;
+    }
+
+    function columnName(index) {
+      let column = "";
+      let number = index;
+      while (number > 0) {
+        const remainder = (number - 1) % 26;
+        column = String.fromCharCode(65 + remainder) + column;
+        number = Math.floor((number - 1) / 26);
+      }
+      return column;
     }
 
     function findHeaderIndex(headers, candidates) {
