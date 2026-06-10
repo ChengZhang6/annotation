@@ -870,6 +870,7 @@
     const OAUTH_CLIENT_ID = "851780710057-jilmd0lqqm402i2gsnpf9o5t3plf1vkr.apps.googleusercontent.com";
     const SPREADSHEET_ID = "1gNt24it0OKAaxJJb-pyXDtpd0PmfT3H1irdJUk-lPEk";
     const FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSdqQa1bmu-sLxzmfuK5-e0Jf83uIIXLZJPaWsngEUJ6alXTqw/viewform?usp=header";
+    const RESPONSE_TAB_NAME = "Form Responses 1";
     const STORAGE_KEY = "cdcf-simple-config";
     const ROSTER_CACHE_KEY = "cdcf-roster-cache";
     const EDITOR_CACHE_KEY = "cdcf-editor-cache";
@@ -883,6 +884,9 @@
     let authRequestMode = "manual";
     let rosterRows = [];
     let currentRosterIndex = -1;
+    let discussionCases = [];
+    let currentDiscussionIndex = -1;
+    let discussionHeaders = [];
     let messageTimer = 0;
     let zoomState = { article: 1, right: 1 };
     let currentMode = "annotation";
@@ -941,16 +945,16 @@
       els["sign-in"].addEventListener("click", signIn);
       els["mode-annotation"].addEventListener("click", () => setMode("annotation"));
       els["mode-discussion"].addEventListener("click", () => setMode("discussion"));
-      els["article-select"].addEventListener("change", () => selectArticleByIndex(Number(els["article-select"].value), false));
-      els["jump-go"].addEventListener("click", jumpToArticle);
+      els["article-select"].addEventListener("change", handleRosterSelect);
+      els["jump-go"].addEventListener("click", jumpToCurrentModeItem);
       els["jump-id"].addEventListener("keydown", (event) => {
         if (event.key === "Enter") {
           event.preventDefault();
-          jumpToArticle();
+          jumpToCurrentModeItem();
         }
       });
-      els["nav-prev"].addEventListener("click", () => moveArticle(-1));
-      els["nav-next"].addEventListener("click", () => moveArticle(1));
+      els["nav-prev"].addEventListener("click", () => moveCurrentModeItem(-1));
+      els["nav-next"].addEventListener("click", () => moveCurrentModeItem(1));
       els["article-refresh"].addEventListener("click", refreshArticleFrame);
       els["tab-form"].addEventListener("click", () => setRightTab("form"));
       els["tab-editor"].addEventListener("click", () => setRightTab("editor"));
@@ -997,6 +1001,31 @@
       };
     }
 
+    function handleRosterSelect() {
+      const index = Number(els["article-select"].value);
+      if (currentMode === "discussion") {
+        selectDiscussionCaseByIndex(index);
+        return;
+      }
+      selectArticleByIndex(index, false);
+    }
+
+    function jumpToCurrentModeItem() {
+      if (currentMode === "discussion") {
+        jumpToDiscussionCase();
+        return;
+      }
+      jumpToArticle();
+    }
+
+    function moveCurrentModeItem(delta) {
+      if (currentMode === "discussion") {
+        moveDiscussionCase(delta);
+        return;
+      }
+      moveArticle(delta);
+    }
+
     function setMode(mode, persist = true) {
       const nextMode = mode === "discussion" ? "discussion" : "annotation";
       currentMode = nextMode;
@@ -1010,40 +1039,42 @@
         localStorage.setItem(MODE_CACHE_KEY, nextMode);
       }
 
-      setAnnotationControlsDisabled(useDiscussion);
+      setModeControls(useDiscussion);
       if (useDiscussion) {
         saveCurrentEditorDraft();
         showDiscussionPlaceholder();
         showDiscussionRightPlaceholder();
+        if (accessToken) {
+          loadDiscussionCases();
+        } else {
+          renderDiscussionOptions();
+        }
         return;
       }
 
       els["discussion-panel"].classList.add("hidden");
+      renderRosterOptions();
       loadFormFrame();
       setRightTab(localStorage.getItem(RIGHT_TAB_KEY) === "editor" ? "editor" : "form");
       const article = currentArticle();
       if (article) {
+        els["article-select"].value = String(currentRosterIndex);
         loadArticleFrame(article.link, article.title || article.id, false, article.id);
       } else {
         showArticlePlaceholder();
       }
     }
 
-    function setAnnotationControlsDisabled(disabled) {
-      [
-        "article-select",
-        "jump-id",
-        "jump-go",
-        "nav-prev",
-        "nav-next",
-        "article-refresh",
-        "tab-form",
-        "tab-editor"
-      ].forEach((id) => {
-        els[id].disabled = disabled;
+    function setModeControls(useDiscussion) {
+      ["article-select", "jump-id", "jump-go", "nav-prev", "nav-next"].forEach((id) => {
+        els[id].disabled = false;
       });
-      els["article-open-link"].setAttribute("aria-disabled", String(disabled));
-      els["form-open-link"].setAttribute("aria-disabled", String(disabled));
+      ["article-refresh", "tab-form", "tab-editor"].forEach((id) => {
+        els[id].disabled = useDiscussion;
+      });
+      els["article-open-link"].setAttribute("aria-disabled", String(useDiscussion));
+      els["form-open-link"].setAttribute("aria-disabled", String(useDiscussion));
+      els["jump-id"].placeholder = useDiscussion ? "A109-C01" : "A050";
     }
 
     function signIn() {
@@ -1090,7 +1121,7 @@
             if (currentMode === "annotation") {
               loadRosterRows();
             } else {
-              showMessage(`${message} Discussion data loading will be added next.`, "ok");
+              loadDiscussionCases();
             }
           }
         });
@@ -1145,6 +1176,35 @@
       }
     }
 
+    async function loadDiscussionCases() {
+      try {
+        requireToken();
+        const previousCase = currentDiscussionCase();
+        const previousId = normalizeCaseId(previousCase && previousCase.caseId ? previousCase.caseId : els["jump-id"].value);
+        const previousIndex = currentDiscussionIndex;
+        const data = await sheetsFetch(`/values/${encodeURIComponent(`${quoteSheet(RESPONSE_TAB_NAME)}!A1:ZZ1000`)}`);
+        const rows = data.values || [];
+        discussionCases = parseDiscussionCases(rows);
+        currentDiscussionIndex = -1;
+        renderDiscussionOptions();
+        if (discussionCases.length) {
+          const idIndex = previousId
+            ? discussionCases.findIndex((row) => normalizeCaseId(row.caseId) === previousId)
+            : -1;
+          const fallbackIndex = previousIndex >= 0
+            ? Math.min(previousIndex, discussionCases.length - 1)
+            : 0;
+          selectDiscussionCaseByIndex(idIndex >= 0 ? idIndex : fallbackIndex);
+        } else {
+          showDiscussionPlaceholder();
+          showDiscussionRightPlaceholder();
+        }
+        showMessage(`Loaded ${discussionCases.length} Cheng discussion case(s).`, "ok");
+      } catch (error) {
+        showMessage(error.message, "error");
+      }
+    }
+
     async function sheetsFetch(path, options = {}) {
       const config = currentConfig();
       const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${config.spreadsheetId}${path}`, {
@@ -1161,6 +1221,35 @@
         throw new Error(body.error && body.error.message ? body.error.message : response.statusText);
       }
       return body;
+    }
+
+    function parseDiscussionCases(rows) {
+      if (!rows.length) {
+        discussionHeaders = [];
+        return [];
+      }
+      discussionHeaders = rows[0].map((header) => String(header || "").trim());
+      const headers = discussionHeaders.map(normalizeHeader);
+      const articleIdIndex = findHeaderIndex(headers, ["articleid", "article_id"]);
+      const caseIdIndex = findHeaderIndex(headers, ["caseid", "case_id"]);
+      const titleIndex = findHeaderIndex(headers, ["article_title", "title", "articletitle"]);
+      const cleanTextIndex = findHeaderIndex(headers, ["drop_in_article_text", "clean_text", "article_text"]);
+      const linkIndex = findHeaderIndex(headers, ["link_to_article", "article_link", "link", "url"]);
+      if (caseIdIndex === -1) {
+        throw new Error(`${RESPONSE_TAB_NAME} is missing a caseID column.`);
+      }
+
+      return rows.slice(1)
+        .map((row, offset) => ({
+          rowNumber: offset + 2,
+          articleId: cellValue(row, articleIdIndex),
+          caseId: cellValue(row, caseIdIndex),
+          title: cellValue(row, titleIndex),
+          cleanText: cellValue(row, cleanTextIndex),
+          link: cellValue(row, linkIndex),
+          values: row
+        }))
+        .filter((row) => row.caseId && !isBrianaCaseId(row.caseId));
     }
 
     function parseRosterRows(rows) {
@@ -1233,6 +1322,73 @@
       }
       const article = rosterRows[currentRosterIndex];
       els["article-position"].textContent = `${currentRosterIndex + 1} / ${rosterRows.length}  ${article.id || ""}`;
+    }
+
+    function renderDiscussionOptions() {
+      if (!discussionCases.length) {
+        els["article-select"].innerHTML = `<option value="">No discussion cases loaded</option>`;
+        updateDiscussionPosition();
+        return;
+      }
+      els["article-select"].innerHTML = discussionCases.map((row, index) => {
+        const labelParts = [row.caseId, row.title].filter(Boolean);
+        return `<option value="${index}">${escapeHtml(labelParts.join(" - ") || `Case ${index + 1}`)}</option>`;
+      }).join("");
+      if (currentDiscussionIndex >= 0) {
+        els["article-select"].value = String(currentDiscussionIndex);
+      }
+      updateDiscussionPosition();
+    }
+
+    function selectDiscussionCaseByIndex(index) {
+      if (!discussionCases.length) {
+        showMessage("Sign in to load discussion cases.", "warn");
+        return;
+      }
+      const requestedIndex = Number.isFinite(index) ? index : 0;
+      const boundedIndex = Math.max(0, Math.min(discussionCases.length - 1, requestedIndex));
+      const discussionCase = discussionCases[boundedIndex];
+      currentDiscussionIndex = boundedIndex;
+      els["article-select"].value = String(boundedIndex);
+      els["jump-id"].value = discussionCase.caseId || "";
+      showDiscussionCasePlaceholder(discussionCase);
+      showDiscussionRightPlaceholder();
+      updateDiscussionPosition();
+    }
+
+    function jumpToDiscussionCase() {
+      const target = normalizeCaseId(els["jump-id"].value);
+      const index = discussionCases.findIndex((row) => normalizeCaseId(row.caseId) === target);
+      if (index === -1) {
+        showMessage(`Case not found: ${els["jump-id"].value}`, "error");
+        return;
+      }
+      selectDiscussionCaseByIndex(index);
+    }
+
+    function moveDiscussionCase(delta) {
+      if (!discussionCases.length) {
+        showMessage("Sign in to load discussion cases.", "warn");
+        return;
+      }
+      const baseIndex = currentDiscussionIndex === -1 ? 0 : currentDiscussionIndex;
+      selectDiscussionCaseByIndex(baseIndex + delta);
+    }
+
+    function currentDiscussionCase() {
+      if (currentDiscussionIndex < 0) {
+        return null;
+      }
+      return discussionCases[currentDiscussionIndex] || null;
+    }
+
+    function updateDiscussionPosition() {
+      if (!discussionCases.length || currentDiscussionIndex === -1) {
+        els["article-position"].textContent = discussionCases.length ? `${discussionCases.length} cases loaded` : "No discussion cases loaded";
+        return;
+      }
+      const discussionCase = discussionCases[currentDiscussionIndex];
+      els["article-position"].textContent = `${currentDiscussionIndex + 1} / ${discussionCases.length}  ${discussionCase.caseId || ""}`;
     }
 
     function loadArticleFrame(link, title, openExternal = false, articleId = "") {
@@ -1483,6 +1639,29 @@
       `;
     }
 
+    function showDiscussionCasePlaceholder(discussionCase) {
+      const title = discussionCase.title || discussionCase.caseId || "Discussion case";
+      els["article-frame-title"].textContent = title;
+      els["article-frame-title"].title = title;
+      els["article-frame-link"].textContent = discussionCase.caseId || "";
+      els["article-frame-link"].title = discussionCase.caseId || "";
+      els["article-open-link"].href = discussionCase.link || "#";
+      els["article-frame"].src = "about:blank";
+      els["article-frame"].srcdoc = `
+        <!doctype html>
+        <html>
+          <body style="margin:0;font:14px system-ui,sans-serif;color:#66717d;background:#fff;">
+            <div style="height:100vh;display:grid;place-items:center;text-align:center;padding:24px;">
+              <div>
+                <strong style="display:block;color:#202327;margin-bottom:8px;">${escapeHtml(discussionCase.caseId || "Discussion case")}</strong>
+                Clean article text will render here in the next step.
+              </div>
+            </div>
+          </body>
+        </html>
+      `;
+    }
+
     function showDiscussionRightPlaceholder() {
       els["tab-form"].classList.remove("active");
       els["tab-editor"].classList.remove("active");
@@ -1538,6 +1717,21 @@
         return `A${match[1].padStart(3, "0")}`;
       }
       return raw;
+    }
+
+    function normalizeCaseId(value) {
+      return String(value || "").trim().toUpperCase();
+    }
+
+    function isBrianaCaseId(value) {
+      return normalizeCaseId(value).startsWith("B-");
+    }
+
+    function cellValue(row, index) {
+      if (index < 0) {
+        return "";
+      }
+      return String(row[index] || "").trim();
     }
 
     function findHeaderIndex(headers, candidates) {
