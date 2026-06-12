@@ -1010,6 +1010,7 @@
     const ZOOM_CACHE_KEY = "cdcf-pane-zoom";
     const SPLIT_CACHE_KEY_PREFIX = "cdcf-pane-split";
     const MODE_CACHE_KEY = "cdcf-mode";
+    const PREVIEW_VIEWPORT_FACTOR = 1.25;
     const SCOPE = "https://www.googleapis.com/auth/spreadsheets";
     let accessToken = "";
     let tokenClient = null;
@@ -1740,9 +1741,10 @@
         ? [els["article-frame"]]
         : [els["preview-frame"], els["form-frame"], els["discussion-panel"]];
       targets.forEach((target) => {
-        target.style.width = `${100 / zoom}%`;
-        target.style.height = `${100 / zoom}%`;
-        target.style.transform = `scale(${zoom})`;
+        const viewportFactor = target === els["preview-frame"] ? PREVIEW_VIEWPORT_FACTOR : 1;
+        target.style.width = `${(100 * viewportFactor) / zoom}%`;
+        target.style.height = `${(100 * viewportFactor) / zoom}%`;
+        target.style.transform = `scale(${zoom / viewportFactor})`;
       });
       const label = pane === "article" ? els["article-zoom-reset"] : els["right-zoom-reset"];
       label.textContent = `${Math.round(zoom * 100)}%`;
