@@ -945,6 +945,7 @@
               <button id="tab-form" class="tab-button" type="button" role="tab" aria-controls="form-frame">Google Form</button>
             </div>
             <div class="viewer-actions">
+              <button id="preview-fit" class="tab-button active" type="button" aria-pressed="true" title="Toggle article preview fit">Fit</button>
               <a id="form-open-link" href="#" target="_blank" rel="noreferrer">Open form</a>
             </div>
           </div>
@@ -1010,6 +1011,9 @@
     const ZOOM_CACHE_KEY = "cdcf-pane-zoom";
     const SPLIT_CACHE_KEY_PREFIX = "cdcf-pane-split-v3";
     const MODE_CACHE_KEY = "cdcf-mode";
+    const PREVIEW_FIT_KEY = "cdcf-preview-fit";
+    const PREVIEW_FIT_CROP_X = 72;
+    const PREVIEW_FIT_CROP_Y = 36;
     const SCOPE = "https://www.googleapis.com/auth/spreadsheets";
     let accessToken = "";
     let tokenClient = null;
@@ -1026,6 +1030,7 @@
     let messageTimer = 0;
     let zoomState = { article: 1, right: 1 };
     let currentMode = "annotation";
+    let previewFitEnabled = true;
 
     const els = {};
     [
@@ -1056,6 +1061,7 @@
       "pane-divider",
       "tab-preview",
       "tab-form",
+      "preview-fit",
       "form-open-link",
       "right-content",
       "preview-frame-wrap",
@@ -1110,6 +1116,7 @@
       els["article-refresh"].addEventListener("click", refreshArticleFrame);
       els["tab-preview"].addEventListener("click", () => setRightTab("preview"));
       els["tab-form"].addEventListener("click", () => setRightTab("form"));
+      els["preview-fit"].addEventListener("click", () => setPreviewFit(!previewFitEnabled));
       els["clean-text-editor"].addEventListener("input", saveCurrentEditorDraft);
       els["article-zoom-out"].addEventListener("click", () => changePaneZoom("article", -0.1));
       els["article-zoom-in"].addEventListener("click", () => changePaneZoom("article", 0.1));
@@ -1123,6 +1130,7 @@
       els["manual-discussion-save"].addEventListener("click", saveManualDiscussionNote);
       els["pane-divider"].addEventListener("pointerdown", startPaneResize);
       els["pane-divider"].addEventListener("dblclick", () => setPaneSplit(defaultPaneSplit()));
+      restorePreviewFit();
       restorePaneZoom();
       restorePaneSplit();
       showArticlePlaceholder();
@@ -1662,9 +1670,31 @@
       els["tab-form"].setAttribute("aria-selected", String(useForm));
       els["preview-frame-wrap"].classList.toggle("hidden", useForm);
       els["form-frame"].classList.toggle("hidden", !useForm);
+      els["preview-fit"].classList.toggle("hidden", useForm);
       els["discussion-panel"].classList.add("hidden");
       els["editor-panel"].classList.remove("hidden");
       localStorage.setItem(RIGHT_TAB_KEY, useForm ? "form" : "preview");
+    }
+
+    function restorePreviewFit() {
+      const cached = localStorage.getItem(PREVIEW_FIT_KEY);
+      previewFitEnabled = cached === null ? true : cached === "1";
+      updatePreviewFitButton();
+    }
+
+    function setPreviewFit(enabled) {
+      previewFitEnabled = Boolean(enabled);
+      localStorage.setItem(PREVIEW_FIT_KEY, previewFitEnabled ? "1" : "0");
+      updatePreviewFitButton();
+      applyPaneZoom("right");
+    }
+
+    function updatePreviewFitButton() {
+      els["preview-fit"].classList.toggle("active", previewFitEnabled);
+      els["preview-fit"].setAttribute("aria-pressed", String(previewFitEnabled));
+      els["preview-fit"].title = previewFitEnabled
+        ? "Show original article preview"
+        : "Fit article preview";
     }
 
     function currentArticle() {
@@ -1740,11 +1770,14 @@
         ? [els["article-frame"]]
         : [els["preview-frame"], els["form-frame"], els["discussion-panel"]];
       targets.forEach((target) => {
-        target.style.position = "";
-        target.style.left = "";
-        target.style.top = "";
-        target.style.width = `${100 / zoom}%`;
-        target.style.height = `${100 / zoom}%`;
+        const usePreviewFit = target === els["preview-frame"] && previewFitEnabled;
+        const cropX = usePreviewFit ? PREVIEW_FIT_CROP_X : 0;
+        const cropY = usePreviewFit ? PREVIEW_FIT_CROP_Y : 0;
+        target.style.position = usePreviewFit ? "absolute" : "";
+        target.style.left = usePreviewFit ? `-${cropX}px` : "";
+        target.style.top = usePreviewFit ? `-${cropY}px` : "";
+        target.style.width = `calc(${100 / zoom}% + ${cropX / zoom}px)`;
+        target.style.height = `calc(${100 / zoom}% + ${cropY / zoom}px)`;
         target.style.transform = `scale(${zoom})`;
       });
       const label = pane === "article" ? els["article-zoom-reset"] : els["right-zoom-reset"];
