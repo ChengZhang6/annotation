@@ -1575,6 +1575,9 @@
         els["article-open-link"].href = link;
         els["article-open-link"].setAttribute("aria-disabled", "false");
         els["preview-frame"].src = link;
+        if (currentMode === "annotation") {
+          setRightTab("preview");
+        }
       } else {
         els["article-open-link"].removeAttribute("href");
         els["article-open-link"].setAttribute("aria-disabled", "true");
