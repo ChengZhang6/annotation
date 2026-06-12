@@ -1008,7 +1008,7 @@
     const EDITOR_CACHE_KEY = "cdcf-editor-cache";
     const RIGHT_TAB_KEY = "cdcf-right-tab";
     const ZOOM_CACHE_KEY = "cdcf-pane-zoom";
-    const SPLIT_CACHE_KEY = "cdcf-pane-split";
+    const SPLIT_CACHE_KEY_PREFIX = "cdcf-pane-split";
     const MODE_CACHE_KEY = "cdcf-mode";
     const SCOPE = "https://www.googleapis.com/auth/spreadsheets";
     let accessToken = "";
@@ -1122,7 +1122,7 @@
       els["discussion-save"].addEventListener("click", saveDiscussionNote);
       els["manual-discussion-save"].addEventListener("click", saveManualDiscussionNote);
       els["pane-divider"].addEventListener("pointerdown", startPaneResize);
-      els["pane-divider"].addEventListener("dblclick", () => setPaneSplit(50));
+      els["pane-divider"].addEventListener("dblclick", () => setPaneSplit(defaultPaneSplit()));
       restorePaneZoom();
       restorePaneSplit();
       showArticlePlaceholder();
@@ -1186,6 +1186,7 @@
       const nextMode = mode === "discussion" ? "discussion" : "annotation";
       currentMode = nextMode;
       document.body.dataset.mode = nextMode;
+      restorePaneSplit();
       const useDiscussion = nextMode === "discussion";
       els["mode-annotation"].classList.toggle("active", !useDiscussion);
       els["mode-discussion"].classList.toggle("active", useDiscussion);
@@ -1756,16 +1757,24 @@
     }
 
     function restorePaneSplit() {
-      const cached = Number(localStorage.getItem(SPLIT_CACHE_KEY));
-      setPaneSplit(Number.isFinite(cached) ? cached : 50, false);
+      const cached = Number(localStorage.getItem(splitCacheKey()));
+      setPaneSplit(Number.isFinite(cached) ? cached : defaultPaneSplit(), false);
     }
 
     function setPaneSplit(percent, persist = true) {
       const bounded = Math.max(30, Math.min(70, Math.round(percent * 10) / 10));
       document.querySelector(".viewer-grid").style.setProperty("--left-pane", `${bounded}%`);
       if (persist) {
-        localStorage.setItem(SPLIT_CACHE_KEY, String(bounded));
+        localStorage.setItem(splitCacheKey(), String(bounded));
       }
+    }
+
+    function splitCacheKey() {
+      return `${SPLIT_CACHE_KEY_PREFIX}-${currentMode}`;
+    }
+
+    function defaultPaneSplit() {
+      return currentMode === "annotation" ? 36 : 50;
     }
 
     function startPaneResize(event) {
