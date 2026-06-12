@@ -671,10 +671,6 @@
       line-height: 1.55;
     }
 
-    body[data-mode="annotation"] #article-frame-wrap {
-      display: none;
-    }
-
     body[data-mode="annotation"] #editor-panel {
       display: grid !important;
     }
@@ -683,13 +679,20 @@
       padding-top: 10px;
     }
 
-    body[data-mode="annotation"] .viewer-toolbar.compact .pane-tabs,
     body[data-mode="annotation"] #article-refresh {
+      display: none;
+    }
+
+    body[data-mode="annotation"] #article-frame-wrap {
       display: none;
     }
 
     body[data-mode="discussion"] #editor-panel {
       display: none !important;
+    }
+
+    body[data-mode="discussion"] #preview-frame-wrap {
+      display: none;
     }
 
     .discussion-panel {
@@ -938,15 +941,18 @@
         <div class="viewer-pane">
           <div class="viewer-toolbar compact">
             <div class="pane-tabs" role="tablist" aria-label="Right pane">
-              <button id="tab-form" class="tab-button active" type="button" role="tab" aria-controls="form-frame">Google Form</button>
-              <button id="tab-editor" class="tab-button" type="button" role="tab" aria-controls="editor-panel">Editor</button>
+              <button id="tab-preview" class="tab-button active" type="button" role="tab" aria-controls="preview-frame-wrap">Article Preview</button>
+              <button id="tab-form" class="tab-button" type="button" role="tab" aria-controls="form-frame">Google Form</button>
             </div>
             <div class="viewer-actions">
               <a id="form-open-link" href="#" target="_blank" rel="noreferrer">Open form</a>
             </div>
           </div>
           <div id="right-content" class="right-content">
-            <iframe id="form-frame" class="tab-panel" title="Google annotation form"></iframe>
+            <div id="preview-frame-wrap" class="zoom-box tab-panel">
+              <iframe id="preview-frame" title="Article preview"></iframe>
+            </div>
+            <iframe id="form-frame" class="tab-panel hidden" title="Google annotation form"></iframe>
             <div id="discussion-panel" class="tab-panel discussion-panel hidden">
               <div id="discussion-empty" class="discussion-empty">Sign in to load discussion cases.</div>
               <div id="discussion-manual-card" class="diff-card hidden">
@@ -1048,10 +1054,12 @@
       "article-zoom-reset",
       "article-zoom-in",
       "pane-divider",
+      "tab-preview",
       "tab-form",
-      "tab-editor",
       "form-open-link",
       "right-content",
+      "preview-frame-wrap",
+      "preview-frame",
       "form-frame",
       "editor-panel",
       "discussion-panel",
@@ -1100,8 +1108,8 @@
       els["nav-prev"].addEventListener("click", () => moveCurrentModeItem(-1));
       els["nav-next"].addEventListener("click", () => moveCurrentModeItem(1));
       els["article-refresh"].addEventListener("click", refreshArticleFrame);
+      els["tab-preview"].addEventListener("click", () => setRightTab("preview"));
       els["tab-form"].addEventListener("click", () => setRightTab("form"));
-      els["tab-editor"].addEventListener("click", () => setRightTab("editor"));
       els["clean-text-editor"].addEventListener("input", saveCurrentEditorDraft);
       els["article-zoom-out"].addEventListener("click", () => changePaneZoom("article", -0.1));
       els["article-zoom-in"].addEventListener("click", () => changePaneZoom("article", 0.1));
@@ -1119,7 +1127,7 @@
       restorePaneSplit();
       showArticlePlaceholder();
       loadFormFrame();
-      setRightTab(localStorage.getItem(RIGHT_TAB_KEY) === "editor" ? "editor" : "form");
+      setRightTab(localStorage.getItem(RIGHT_TAB_KEY) === "form" ? "form" : "preview");
       restoreRosterCache();
       setMode(localStorage.getItem(MODE_CACHE_KEY) === "discussion" ? "discussion" : "annotation", false);
       window.setTimeout(trySilentSignIn, 600);
@@ -1203,7 +1211,7 @@
       els["discussion-panel"].classList.add("hidden");
       renderRosterOptions();
       loadFormFrame();
-      setRightTab(localStorage.getItem(RIGHT_TAB_KEY) === "editor" ? "editor" : "form");
+      setRightTab(localStorage.getItem(RIGHT_TAB_KEY) === "form" ? "form" : "preview");
       const article = currentArticle();
       if (article) {
         els["article-select"].value = String(currentRosterIndex);
@@ -1217,7 +1225,7 @@
       ["article-select", "jump-id", "jump-go", "nav-prev", "nav-next"].forEach((id) => {
         els[id].disabled = false;
       });
-      ["article-refresh", "tab-form", "tab-editor"].forEach((id) => {
+      ["article-refresh", "tab-preview", "tab-form"].forEach((id) => {
         els[id].disabled = useDiscussion;
       });
       els["form-open-link"].setAttribute("aria-disabled", String(useDiscussion));
@@ -1566,9 +1574,11 @@
       if (link) {
         els["article-open-link"].href = link;
         els["article-open-link"].setAttribute("aria-disabled", "false");
+        els["preview-frame"].src = link;
       } else {
         els["article-open-link"].removeAttribute("href");
         els["article-open-link"].setAttribute("aria-disabled", "true");
+        els["preview-frame"].src = "about:blank";
       }
     }
 
@@ -1597,8 +1607,8 @@
         showMessage("No article selected.", "warn");
         return;
       }
-      els["article-frame"].removeAttribute("srcdoc");
-      els["article-frame"].src = withCacheBust(article.link);
+      els["preview-frame"].src = withCacheBust(article.link);
+      setRightTab("preview");
       showMessage(`Refreshing: ${article.id || article.title || "article"}`, "ok");
     }
 
@@ -1641,14 +1651,16 @@
         showDiscussionRightPlaceholder();
         return;
       }
-      els["tab-form"].classList.add("active");
-      els["tab-editor"].classList.remove("active");
-      els["tab-form"].setAttribute("aria-selected", "true");
-      els["tab-editor"].setAttribute("aria-selected", "false");
-      els["form-frame"].classList.remove("hidden");
+      const useForm = tabName === "form";
+      els["tab-preview"].classList.toggle("active", !useForm);
+      els["tab-form"].classList.toggle("active", useForm);
+      els["tab-preview"].setAttribute("aria-selected", String(!useForm));
+      els["tab-form"].setAttribute("aria-selected", String(useForm));
+      els["preview-frame-wrap"].classList.toggle("hidden", useForm);
+      els["form-frame"].classList.toggle("hidden", !useForm);
       els["discussion-panel"].classList.add("hidden");
       els["editor-panel"].classList.remove("hidden");
-      localStorage.setItem(RIGHT_TAB_KEY, "form");
+      localStorage.setItem(RIGHT_TAB_KEY, useForm ? "form" : "preview");
     }
 
     function currentArticle() {
@@ -1722,7 +1734,7 @@
       const zoom = zoomState[pane];
       const targets = pane === "article"
         ? [els["article-frame"]]
-        : [els["form-frame"], els["discussion-panel"]];
+        : [els["preview-frame"], els["form-frame"], els["discussion-panel"]];
       targets.forEach((target) => {
         target.style.width = `${100 / zoom}%`;
         target.style.height = `${100 / zoom}%`;
@@ -1782,6 +1794,7 @@
       els["article-frame-link"].title = "";
       els["article-open-link"].removeAttribute("href");
       els["article-open-link"].setAttribute("aria-disabled", "true");
+      els["preview-frame"].src = "about:blank";
       els["article-frame"].src = "about:blank";
       els["article-frame"].srcdoc = `
         <!doctype html>
@@ -1805,6 +1818,7 @@
       els["article-frame-link"].title = "";
       els["article-open-link"].removeAttribute("href");
       els["article-open-link"].setAttribute("aria-disabled", "true");
+      els["preview-frame"].src = "about:blank";
       els["article-frame"].src = "about:blank";
       els["article-frame"].srcdoc = `
         <!doctype html>
@@ -2113,10 +2127,11 @@
     }
 
     function showDiscussionRightPlaceholder() {
+      els["tab-preview"].classList.remove("active");
       els["tab-form"].classList.remove("active");
-      els["tab-editor"].classList.remove("active");
+      els["tab-preview"].setAttribute("aria-selected", "false");
       els["tab-form"].setAttribute("aria-selected", "false");
-      els["tab-editor"].setAttribute("aria-selected", "false");
+      els["preview-frame-wrap"].classList.add("hidden");
       els["form-frame"].classList.add("hidden");
       els["editor-panel"].classList.add("hidden");
       els["discussion-panel"].classList.remove("hidden");
