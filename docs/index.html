@@ -1008,7 +1008,7 @@
     const EDITOR_CACHE_KEY = "cdcf-editor-cache";
     const RIGHT_TAB_KEY = "cdcf-right-tab";
     const ZOOM_CACHE_KEY = "cdcf-pane-zoom";
-    const SPLIT_CACHE_KEY_PREFIX = "cdcf-pane-split-v2";
+    const SPLIT_CACHE_KEY_PREFIX = "cdcf-pane-split-v3";
     const MODE_CACHE_KEY = "cdcf-mode";
     const SCOPE = "https://www.googleapis.com/auth/spreadsheets";
     let accessToken = "";
@@ -1777,7 +1777,7 @@
     }
 
     function defaultPaneSplit() {
-      return 50;
+      return currentMode === "annotation" ? 34 : 50;
     }
 
     function startPaneResize(event) {
