@@ -671,6 +671,27 @@
       line-height: 1.55;
     }
 
+    body[data-mode="annotation"] #article-frame-wrap {
+      display: none;
+    }
+
+    body[data-mode="annotation"] #editor-panel {
+      display: grid !important;
+    }
+
+    body[data-mode="annotation"] #editor-panel .editor-textarea {
+      padding-top: 10px;
+    }
+
+    body[data-mode="annotation"] #tab-editor,
+    body[data-mode="annotation"] #article-refresh {
+      display: none;
+    }
+
+    body[data-mode="discussion"] #editor-panel {
+      display: none !important;
+    }
+
     .discussion-panel {
       height: 100%;
       overflow: auto;
@@ -909,6 +930,9 @@
               <button id="article-zoom-in" type="button" aria-label="Zoom article in">+</button>
             </div>
           </div>
+          <div id="editor-panel" class="tab-panel editor-panel hidden">
+            <textarea id="clean-text-editor" class="editor-textarea" autocomplete="off" spellcheck="true" placeholder="Paste and edit clean text here"></textarea>
+          </div>
         </div>
         <button id="pane-divider" class="pane-divider" type="button" aria-label="Resize panes" title="Drag to resize panes"></button>
         <div class="viewer-pane">
@@ -923,9 +947,6 @@
           </div>
           <div id="right-content" class="right-content">
             <iframe id="form-frame" class="tab-panel" title="Google annotation form"></iframe>
-            <div id="editor-panel" class="tab-panel editor-panel hidden">
-              <textarea id="clean-text-editor" class="editor-textarea" autocomplete="off" spellcheck="true" placeholder="Paste and edit clean text here"></textarea>
-            </div>
             <div id="discussion-panel" class="tab-panel discussion-panel hidden">
               <div id="discussion-empty" class="discussion-empty">Sign in to load discussion cases.</div>
               <div id="discussion-manual-card" class="diff-card hidden">
@@ -1186,7 +1207,7 @@
       const article = currentArticle();
       if (article) {
         els["article-select"].value = String(currentRosterIndex);
-        loadArticleFrame(article.link, article.title || article.id, false, article.id);
+        showAnnotationEditor(article);
       } else {
         showArticlePlaceholder();
       }
@@ -1429,7 +1450,10 @@
       currentRosterIndex = boundedIndex;
       els["article-select"].value = String(boundedIndex);
       els["jump-id"].value = article.id || "";
-      loadArticleFrame(article.link, article.title || article.id, openExternal, article.id);
+      showAnnotationEditor(article);
+      if (openExternal && article.link) {
+        window.open(article.link, "cdcf_article_window", "noopener");
+      }
       loadEditorDraft(article);
       updateArticlePosition();
       saveRosterCache();
@@ -1530,6 +1554,24 @@
       els["article-position"].textContent = `${currentDiscussionIndex + 1} / ${discussionCases.length}  ${discussionCase.caseId || ""}`;
     }
 
+    function showAnnotationEditor(article) {
+      const title = article.title || article.id || "Article";
+      const link = article.link || "";
+      els["article-frame"].removeAttribute("srcdoc");
+      els["article-frame"].src = "about:blank";
+      els["article-frame-title"].textContent = title;
+      els["article-frame-title"].title = title;
+      els["article-frame-link"].textContent = link;
+      els["article-frame-link"].title = link;
+      if (link) {
+        els["article-open-link"].href = link;
+        els["article-open-link"].setAttribute("aria-disabled", "false");
+      } else {
+        els["article-open-link"].removeAttribute("href");
+        els["article-open-link"].setAttribute("aria-disabled", "true");
+      }
+    }
+
     function loadArticleFrame(link, title, openExternal = false, articleId = "") {
       if (!link) {
         showMessage("This roster row has no article link.", "warn");
@@ -1599,17 +1641,14 @@
         showDiscussionRightPlaceholder();
         return;
       }
-      const useEditor = tabName === "editor";
-      els["tab-form"].classList.toggle("active", !useEditor);
-      els["tab-editor"].classList.toggle("active", useEditor);
-      els["tab-form"].setAttribute("aria-selected", String(!useEditor));
-      els["tab-editor"].setAttribute("aria-selected", String(useEditor));
-      els["form-frame"].classList.toggle("hidden", useEditor);
-      els["editor-panel"].classList.toggle("hidden", !useEditor);
-      localStorage.setItem(RIGHT_TAB_KEY, useEditor ? "editor" : "form");
-      if (useEditor) {
-        els["clean-text-editor"].focus();
-      }
+      els["tab-form"].classList.add("active");
+      els["tab-editor"].classList.remove("active");
+      els["tab-form"].setAttribute("aria-selected", "true");
+      els["tab-editor"].setAttribute("aria-selected", "false");
+      els["form-frame"].classList.remove("hidden");
+      els["discussion-panel"].classList.add("hidden");
+      els["editor-panel"].classList.remove("hidden");
+      localStorage.setItem(RIGHT_TAB_KEY, "form");
     }
 
     function currentArticle() {
@@ -1683,7 +1722,7 @@
       const zoom = zoomState[pane];
       const targets = pane === "article"
         ? [els["article-frame"]]
-        : [els["form-frame"], els["editor-panel"], els["discussion-panel"]];
+        : [els["form-frame"], els["discussion-panel"]];
       targets.forEach((target) => {
         target.style.width = `${100 / zoom}%`;
         target.style.height = `${100 / zoom}%`;
