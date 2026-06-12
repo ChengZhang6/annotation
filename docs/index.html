@@ -1008,10 +1008,8 @@
     const EDITOR_CACHE_KEY = "cdcf-editor-cache";
     const RIGHT_TAB_KEY = "cdcf-right-tab";
     const ZOOM_CACHE_KEY = "cdcf-pane-zoom";
-    const SPLIT_CACHE_KEY_PREFIX = "cdcf-pane-split";
+    const SPLIT_CACHE_KEY_PREFIX = "cdcf-pane-split-v2";
     const MODE_CACHE_KEY = "cdcf-mode";
-    const PREVIEW_CROP_X = 64;
-    const PREVIEW_CROP_Y = 28;
     const SCOPE = "https://www.googleapis.com/auth/spreadsheets";
     let accessToken = "";
     let tokenClient = null;
@@ -1742,14 +1740,11 @@
         ? [els["article-frame"]]
         : [els["preview-frame"], els["form-frame"], els["discussion-panel"]];
       targets.forEach((target) => {
-        const isPreview = target === els["preview-frame"];
-        const cropX = isPreview ? PREVIEW_CROP_X : 0;
-        const cropY = isPreview ? PREVIEW_CROP_Y : 0;
-        target.style.position = isPreview ? "absolute" : "";
-        target.style.left = isPreview ? `-${cropX}px` : "";
-        target.style.top = isPreview ? `-${cropY}px` : "";
-        target.style.width = `calc(${100 / zoom}% + ${cropX / zoom}px)`;
-        target.style.height = `calc(${100 / zoom}% + ${cropY / zoom}px)`;
+        target.style.position = "";
+        target.style.left = "";
+        target.style.top = "";
+        target.style.width = `${100 / zoom}%`;
+        target.style.height = `${100 / zoom}%`;
         target.style.transform = `scale(${zoom})`;
       });
       const label = pane === "article" ? els["article-zoom-reset"] : els["right-zoom-reset"];
@@ -1782,7 +1777,7 @@
     }
 
     function defaultPaneSplit() {
-      return currentMode === "annotation" ? 36 : 50;
+      return 50;
     }
 
     function startPaneResize(event) {
