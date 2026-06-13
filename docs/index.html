@@ -2415,7 +2415,7 @@
       els["case-review-case-id"].value = nextCaseId;
       renderCaseReviewCaseOptions([...existingCaseReviewSelectIds(), nextCaseId], nextCaseId);
       setCaseReviewCheckboxes(new Set());
-      showMessage(`Ready to flag ${nextCaseId}. It will be created after you check an attribute.`, "ok");
+      showMessage(`${nextCaseId} ready. First checked flag will create the row.`, "ok");
     }
 
     function existingCaseReviewSelectIds() {
@@ -2473,9 +2473,11 @@
         return;
       }
       try {
-        await saveCaseReviewFlag(caseId, checkbox.dataset.attribute, checkbox.checked);
+        const result = await saveCaseReviewFlag(caseId, checkbox.dataset.attribute, checkbox.checked);
         renderCaseReviewCaseOptions([...existingCaseReviewSelectIds(), caseId], caseId);
-        showMessage(`${caseId} ${checkbox.dataset.attribute}: ${checkbox.checked ? "flagged" : "unflagged"}.`, "ok");
+        const action = checkbox.checked ? "flagged" : "unflagged";
+        const prefix = result.created ? `Created ${caseId} and saved` : `Saved ${caseId}`;
+        showMessage(`${prefix}: ${checkbox.dataset.attribute} ${action}.`, "ok");
       } catch (error) {
         checkbox.checked = !checkbox.checked;
         showMessage(error.message, "error");
@@ -2504,6 +2506,7 @@
         rowValues[targetColumnIndex] = value;
         await updateSheetValues(`${quoteSheet(CASE_REVIEW_TAB_NAME)}!A${targetRowNumber}:${columnName(targetColumnIndex + 1)}${targetRowNumber}`, [rowValues]);
       }
+      return { created: existingOffset === -1 };
     }
 
     function currentCaseReviewCaseId() {
