@@ -1213,6 +1213,8 @@
       els["tab-preview"].addEventListener("click", () => setRightTab("preview"));
       els["tab-form"].addEventListener("click", () => setRightTab("form"));
       els["preview-fit"].addEventListener("click", () => setPreviewFit(!previewFitEnabled));
+      els["case-review-case-id"].addEventListener("change", loadCaseReviewFlags);
+      els["case-review-flags"].addEventListener("change", handleCaseReviewFlagChange);
       els["clean-text-editor"].addEventListener("input", saveCurrentEditorDraft);
       els["article-zoom-out"].addEventListener("click", () => changePaneZoom("article", -0.1));
       els["article-zoom-in"].addEventListener("click", () => changePaneZoom("article", 0.1));
@@ -1445,6 +1447,7 @@
         parseResponseHeaders(data.values || []);
         renderCaseReviewFlags();
         await ensureCaseReviewHeaders();
+        await loadCaseReviewFlags();
       } catch (error) {
         renderCaseReviewEmpty(error.message);
       }
@@ -1598,6 +1601,7 @@
       loadEditorDraft(article);
       updateArticlePosition();
       saveRosterCache();
+      loadCaseReviewFlags();
     }
 
     function jumpToArticle() {
@@ -2315,6 +2319,91 @@
       ];
     }
 
+    async function loadCaseReviewFlags() {
+      if (!accessToken || currentMode !== "annotation" || discussionAttributeStartIndex === -1) {
+        return;
+      }
+      const caseId = currentCaseReviewCaseId();
+      if (!caseId) {
+        setCaseReviewCheckboxes(new Set());
+        return;
+      }
+      try {
+        const headers = await ensureCaseReviewHeaders();
+        const rows = await readSheetRows(CASE_REVIEW_TAB_NAME);
+        const existingRow = rows.slice(1).find((row) => normalizeCaseId(row[0]) === normalizeCaseId(caseId));
+        if (!existingRow) {
+          setCaseReviewCheckboxes(new Set());
+          return;
+        }
+        const checkedAttributes = new Set();
+        discussionHeaders.slice(discussionAttributeStartIndex).forEach((attribute) => {
+          const index = headers.indexOf(caseReviewFlagHeader(attribute));
+          const value = index >= 0 ? String(existingRow[index] || "").trim().toLowerCase() : "";
+          if (value === "yes" || value === "true" || value === "1") {
+            checkedAttributes.add(attribute);
+          }
+        });
+        setCaseReviewCheckboxes(checkedAttributes);
+      } catch (error) {
+        showMessage(error.message, "error");
+      }
+    }
+
+    function setCaseReviewCheckboxes(checkedAttributes) {
+      els["case-review-flags"].querySelectorAll('input[type="checkbox"][data-attribute]').forEach((checkbox) => {
+        checkbox.checked = checkedAttributes.has(checkbox.dataset.attribute);
+      });
+    }
+
+    async function handleCaseReviewFlagChange(event) {
+      const checkbox = event.target;
+      if (!(checkbox instanceof HTMLInputElement) || checkbox.type !== "checkbox" || !checkbox.dataset.attribute) {
+        return;
+      }
+      const caseId = currentCaseReviewCaseId();
+      if (!caseId) {
+        checkbox.checked = !checkbox.checked;
+        showMessage("Enter a Case ID before flagging attributes.", "warn");
+        return;
+      }
+      try {
+        await saveCaseReviewFlag(caseId, checkbox.dataset.attribute, checkbox.checked);
+        showMessage(`${caseId} ${checkbox.dataset.attribute}: ${checkbox.checked ? "flagged" : "unflagged"}.`, "ok");
+      } catch (error) {
+        checkbox.checked = !checkbox.checked;
+        showMessage(error.message, "error");
+      }
+    }
+
+    async function saveCaseReviewFlag(caseId, attribute, checked) {
+      requireToken();
+      const headers = await ensureCaseReviewHeaders();
+      const targetHeader = caseReviewFlagHeader(attribute);
+      const targetColumnIndex = headers.indexOf(targetHeader);
+      if (targetColumnIndex === -1) {
+        throw new Error(`Case review header not found: ${targetHeader}`);
+      }
+
+      const rows = await readSheetRows(CASE_REVIEW_TAB_NAME);
+      const existingOffset = rows.slice(1).findIndex((row) => normalizeCaseId(row[0]) === normalizeCaseId(caseId));
+      const targetRowNumber = existingOffset >= 0 ? existingOffset + 2 : Math.max(rows.length + 1, 2);
+      const value = checked ? "yes" : "no";
+      if (existingOffset >= 0) {
+        const cell = `${columnName(targetColumnIndex + 1)}${targetRowNumber}`;
+        await updateSheetValues(`${quoteSheet(CASE_REVIEW_TAB_NAME)}!${cell}`, [[value]]);
+      } else {
+        const rowValues = Array(targetColumnIndex + 1).fill("");
+        rowValues[0] = caseId;
+        rowValues[targetColumnIndex] = value;
+        await updateSheetValues(`${quoteSheet(CASE_REVIEW_TAB_NAME)}!A${targetRowNumber}:${columnName(targetColumnIndex + 1)}${targetRowNumber}`, [rowValues]);
+      }
+    }
+
+    function currentCaseReviewCaseId() {
+      return normalizeCaseId(els["case-review-case-id"].value);
+    }
+
     function showDiscussionEmpty(message) {
       currentDiscussionDiffs = [];
       currentDiscussionDiffIndex = 0;
@@ -2344,7 +2433,7 @@
       }
       els["case-review-flags"].innerHTML = attributes.map((attribute) => (
         `<label class="case-flag">
-          <input type="checkbox" data-attribute="${escapeHtml(attribute)}" disabled>
+          <input type="checkbox" data-attribute="${escapeHtml(attribute)}">
           <span>${escapeHtml(attribute)}</span>
         </label>`
       )).join("");
