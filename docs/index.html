@@ -1097,6 +1097,7 @@
     const FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSdqQa1bmu-sLxzmfuK5-e0Jf83uIIXLZJPaWsngEUJ6alXTqw/viewform?usp=header";
     const RESPONSE_TAB_NAME = "Form Responses 1";
     const DISCUSSION_TAB_NAME = "discussion";
+    const CASE_REVIEW_TAB_NAME = "case_review";
     const STORAGE_KEY = "cdcf-simple-config";
     const ROSTER_CACHE_KEY = "cdcf-roster-cache";
     const EDITOR_CACHE_KEY = "cdcf-editor-cache";
@@ -1443,6 +1444,7 @@
         const data = await sheetsFetch(`/values/${encodeURIComponent(`${quoteSheet(RESPONSE_TAB_NAME)}!A1:ZZ1`)}`);
         parseResponseHeaders(data.values || []);
         renderCaseReviewFlags();
+        await ensureCaseReviewHeaders();
       } catch (error) {
         renderCaseReviewEmpty(error.message);
       }
@@ -2225,7 +2227,7 @@
     }
 
     async function ensureDiscussionHeaders() {
-      await ensureDiscussionSheetExists();
+      await ensureSheetExists(DISCUSSION_TAB_NAME);
       const desiredHeaders = desiredDiscussionHeaders();
       const rows = await readDiscussionRows("A1:ZZ1");
       const existingHeaders = (rows[0] || []).map((header) => String(header || "").trim());
@@ -2241,10 +2243,27 @@
       return headers;
     }
 
-    async function ensureDiscussionSheetExists() {
+    async function ensureCaseReviewHeaders() {
+      await ensureSheetExists(CASE_REVIEW_TAB_NAME);
+      const desiredHeaders = desiredCaseReviewHeaders();
+      const rows = await readSheetRows(CASE_REVIEW_TAB_NAME, "A1:ZZ1");
+      const existingHeaders = (rows[0] || []).map((header) => String(header || "").trim());
+      const hasExistingHeaders = existingHeaders.some(Boolean);
+      const headers = hasExistingHeaders ? existingHeaders.slice() : desiredHeaders.slice();
+      headers[0] = "caseID";
+      desiredHeaders.slice(1).forEach((header) => {
+        if (!headers.includes(header)) {
+          headers.push(header);
+        }
+      });
+      await updateSheetValues(`${quoteSheet(CASE_REVIEW_TAB_NAME)}!A1:${columnName(headers.length)}1`, [headers]);
+      return headers;
+    }
+
+    async function ensureSheetExists(tabName) {
       const metadata = await sheetsFetch("?fields=sheets.properties.title");
       const sheets = metadata.sheets || [];
-      const exists = sheets.some((sheet) => sheet.properties && sheet.properties.title === DISCUSSION_TAB_NAME);
+      const exists = sheets.some((sheet) => sheet.properties && sheet.properties.title === tabName);
       if (exists) {
         return;
       }
@@ -2255,7 +2274,7 @@
             {
               addSheet: {
                 properties: {
-                  title: DISCUSSION_TAB_NAME
+                  title: tabName
                 }
               }
             }
@@ -2265,7 +2284,11 @@
     }
 
     async function readDiscussionRows(range = "A1:ZZ1000") {
-      const data = await sheetsFetch(`/values/${encodeURIComponent(`${quoteSheet(DISCUSSION_TAB_NAME)}!${range}`)}`);
+      return readSheetRows(DISCUSSION_TAB_NAME, range);
+    }
+
+    async function readSheetRows(tabName, range = "A1:ZZ1000") {
+      const data = await sheetsFetch(`/values/${encodeURIComponent(`${quoteSheet(tabName)}!${range}`)}`);
       return data.values || [];
     }
 
@@ -2280,6 +2303,15 @@
       return [
         "caseID",
         ...discussionHeaders.slice(discussionAttributeStartIndex).map(discussionNoteHeader)
+      ];
+    }
+
+    function desiredCaseReviewHeaders() {
+      const attributes = discussionHeaders.slice(discussionAttributeStartIndex);
+      return [
+        "caseID",
+        ...attributes.map(discussionNoteHeader),
+        ...attributes.map(caseReviewFlagHeader)
       ];
     }
 
@@ -2409,6 +2441,14 @@
         .replace(/[^A-Za-z0-9]+/g, "_")
         .replace(/^_+|_+$/g, "");
       return `notes_${clean || "attribute"}`;
+    }
+
+    function caseReviewFlagHeader(attribute) {
+      const clean = String(attribute || "attribute")
+        .trim()
+        .replace(/[^A-Za-z0-9]+/g, "_")
+        .replace(/^_+|_+$/g, "");
+      return `flag_${clean || "attribute"}`;
     }
 
     function columnName(index) {
