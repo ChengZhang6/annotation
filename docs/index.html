@@ -751,6 +751,21 @@
       font-weight: 800;
     }
 
+    .case-picker {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: end;
+      gap: 6px;
+    }
+
+    .case-picker button {
+      min-width: 42px;
+      height: 36px;
+      padding: 0 9px;
+      border-radius: 8px;
+      font-weight: 800;
+    }
+
     .case-review-list {
       min-height: 0;
       overflow: auto;
@@ -1080,6 +1095,13 @@
               Case ID
               <input id="case-review-case-id" autocomplete="off" placeholder="A013-C01">
             </label>
+            <div class="case-picker" aria-label="Case selector">
+              <label>
+                Existing cases
+                <select id="case-review-case-select"></select>
+              </label>
+              <button id="case-review-add-case" type="button" title="Use next case ID">+C</button>
+            </div>
             <div id="case-review-flags" class="case-review-list">
               <div class="case-review-empty">No flags loaded</div>
             </div>
@@ -1162,6 +1184,8 @@
       "preview-frame",
       "form-frame",
       "case-review-case-id",
+      "case-review-case-select",
+      "case-review-add-case",
       "case-review-flags",
       "editor-panel",
       "discussion-panel",
@@ -1213,7 +1237,9 @@
       els["tab-preview"].addEventListener("click", () => setRightTab("preview"));
       els["tab-form"].addEventListener("click", () => setRightTab("form"));
       els["preview-fit"].addEventListener("click", () => setPreviewFit(!previewFitEnabled));
-      els["case-review-case-id"].addEventListener("change", loadCaseReviewFlags);
+      els["case-review-case-id"].addEventListener("change", handleCaseReviewCaseInput);
+      els["case-review-case-select"].addEventListener("change", handleCaseReviewCaseSelect);
+      els["case-review-add-case"].addEventListener("click", addCaseReviewCase);
       els["case-review-flags"].addEventListener("change", handleCaseReviewFlagChange);
       els["clean-text-editor"].addEventListener("input", saveCurrentEditorDraft);
       els["article-zoom-out"].addEventListener("click", () => changePaneZoom("article", -0.1));
@@ -1324,6 +1350,7 @@
       if (article) {
         els["article-select"].value = String(currentRosterIndex);
         showAnnotationEditor(article);
+        refreshCaseReviewForArticle();
       } else {
         showArticlePlaceholder();
       }
@@ -1447,7 +1474,7 @@
         parseResponseHeaders(data.values || []);
         renderCaseReviewFlags();
         await ensureCaseReviewHeaders();
-        await loadCaseReviewFlags();
+        await refreshCaseReviewForArticle();
       } catch (error) {
         renderCaseReviewEmpty(error.message);
       }
@@ -1601,7 +1628,7 @@
       loadEditorDraft(article);
       updateArticlePosition();
       saveRosterCache();
-      loadCaseReviewFlags();
+      refreshCaseReviewForArticle();
     }
 
     function jumpToArticle() {
@@ -1702,7 +1729,9 @@
     function showAnnotationEditor(article) {
       const title = article.title || article.id || "Article";
       const link = article.link || "";
-      els["case-review-case-id"].value = defaultCaseIdForArticle(article);
+      const defaultCaseId = defaultCaseIdForArticle(article);
+      els["case-review-case-id"].value = defaultCaseId;
+      renderCaseReviewCaseOptions([defaultCaseId], defaultCaseId);
       els["article-frame"].removeAttribute("srcdoc");
       els["article-frame"].src = "about:blank";
       els["article-frame-title"].textContent = title;
@@ -2319,6 +2348,84 @@
       ];
     }
 
+    async function refreshCaseReviewForArticle(preferredCaseId = currentCaseReviewCaseId()) {
+      if (currentMode !== "annotation") {
+        return;
+      }
+      await loadCaseReviewCaseOptions(preferredCaseId);
+      await loadCaseReviewFlags();
+    }
+
+    async function loadCaseReviewCaseOptions(preferredCaseId = currentCaseReviewCaseId()) {
+      const article = currentArticle();
+      const articleId = normalizeArticleId(article && article.id);
+      const defaultCaseId = defaultCaseIdForArticle(article);
+      if (!articleId || !defaultCaseId) {
+        renderCaseReviewCaseOptions([], "");
+        return;
+      }
+
+      if (!accessToken || discussionAttributeStartIndex === -1) {
+        renderCaseReviewCaseOptions([defaultCaseId], preferredCaseId || defaultCaseId);
+        return;
+      }
+
+      try {
+        await ensureCaseReviewHeaders();
+        const rows = await readSheetRows(CASE_REVIEW_TAB_NAME, "A1:A1000");
+        const caseIds = rows.slice(1)
+          .map((row) => normalizeCaseId(row[0]))
+          .filter((caseId) => caseIdBelongsToArticle(caseId, articleId));
+        renderCaseReviewCaseOptions([defaultCaseId, ...caseIds], preferredCaseId || defaultCaseId);
+      } catch (error) {
+        renderCaseReviewCaseOptions([defaultCaseId], preferredCaseId || defaultCaseId);
+        showMessage(error.message, "error");
+      }
+    }
+
+    function renderCaseReviewCaseOptions(caseIds, selectedCaseId) {
+      const uniqueCaseIds = uniqueSortedCaseIds(caseIds);
+      const selected = normalizeCaseId(selectedCaseId) || uniqueCaseIds[0] || "";
+      const options = uniqueSortedCaseIds([...uniqueCaseIds, selected].filter(Boolean));
+      els["case-review-case-select"].innerHTML = options.map((caseId) => (
+        `<option value="${escapeHtml(caseId)}">${escapeHtml(caseId)}</option>`
+      )).join("");
+      els["case-review-case-select"].disabled = !options.length;
+      els["case-review-case-select"].value = selected;
+    }
+
+    function handleCaseReviewCaseInput() {
+      const caseId = currentCaseReviewCaseId();
+      els["case-review-case-id"].value = caseId;
+      renderCaseReviewCaseOptions(existingCaseReviewSelectIds(), caseId);
+      loadCaseReviewFlags();
+    }
+
+    function handleCaseReviewCaseSelect() {
+      els["case-review-case-id"].value = normalizeCaseId(els["case-review-case-select"].value);
+      loadCaseReviewFlags();
+    }
+
+    function addCaseReviewCase() {
+      const article = currentArticle();
+      const articleId = normalizeArticleId(article && article.id);
+      if (!articleId) {
+        showMessage("Select an article before adding a case.", "warn");
+        return;
+      }
+      const nextCaseId = nextCaseIdForArticle(articleId, existingCaseReviewSelectIds());
+      els["case-review-case-id"].value = nextCaseId;
+      renderCaseReviewCaseOptions([...existingCaseReviewSelectIds(), nextCaseId], nextCaseId);
+      setCaseReviewCheckboxes(new Set());
+      showMessage(`Ready to flag ${nextCaseId}. It will be created after you check an attribute.`, "ok");
+    }
+
+    function existingCaseReviewSelectIds() {
+      return Array.from(els["case-review-case-select"].options)
+        .map((option) => normalizeCaseId(option.value))
+        .filter(Boolean);
+    }
+
     async function loadCaseReviewFlags() {
       if (!accessToken || currentMode !== "annotation" || discussionAttributeStartIndex === -1) {
         return;
@@ -2369,6 +2476,7 @@
       }
       try {
         await saveCaseReviewFlag(caseId, checkbox.dataset.attribute, checkbox.checked);
+        renderCaseReviewCaseOptions([...existingCaseReviewSelectIds(), caseId], caseId);
         showMessage(`${caseId} ${checkbox.dataset.attribute}: ${checkbox.checked ? "flagged" : "unflagged"}.`, "ok");
       } catch (error) {
         checkbox.checked = !checkbox.checked;
@@ -2506,6 +2614,44 @@
 
     function normalizeCaseId(value) {
       return String(value || "").trim().toUpperCase();
+    }
+
+    function parseCaseId(value) {
+      const caseId = normalizeCaseId(value);
+      const match = caseId.match(/^(A\d+)-C(\d+)$/);
+      if (!match) {
+        return null;
+      }
+      return {
+        articleId: normalizeArticleId(match[1]),
+        caseNumber: Number(match[2])
+      };
+    }
+
+    function caseIdBelongsToArticle(caseId, articleId) {
+      const parts = parseCaseId(caseId);
+      return Boolean(parts && parts.articleId === normalizeArticleId(articleId));
+    }
+
+    function uniqueSortedCaseIds(caseIds) {
+      return Array.from(new Set(caseIds.map(normalizeCaseId).filter(Boolean)))
+        .sort((left, right) => {
+          const leftParts = parseCaseId(left);
+          const rightParts = parseCaseId(right);
+          if (leftParts && rightParts && leftParts.articleId === rightParts.articleId) {
+            return leftParts.caseNumber - rightParts.caseNumber;
+          }
+          return left.localeCompare(right);
+        });
+    }
+
+    function nextCaseIdForArticle(articleId, caseIds) {
+      const normalizedArticleId = normalizeArticleId(articleId);
+      const maxCaseNumber = caseIds
+        .map(parseCaseId)
+        .filter((parts) => parts && parts.articleId === normalizedArticleId)
+        .reduce((max, parts) => Math.max(max, parts.caseNumber), 0);
+      return `${normalizedArticleId}-C${String(maxCaseNumber + 1).padStart(2, "0")}`;
     }
 
     function isBrianaCaseId(value) {
