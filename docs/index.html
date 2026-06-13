@@ -771,6 +771,28 @@
       text-align: center;
     }
 
+    .case-flag {
+      display: grid;
+      grid-template-columns: 16px minmax(0, 1fr);
+      align-items: start;
+      gap: 8px;
+      padding: 7px 8px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfcfd;
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 650;
+      line-height: 1.3;
+    }
+
+    .case-flag input {
+      width: 15px;
+      height: 15px;
+      margin: 1px 0 0;
+      accent-color: var(--green);
+    }
+
     iframe {
       width: 100%;
       height: 100%;
@@ -1139,6 +1161,7 @@
       "preview-frame",
       "form-frame",
       "case-review-case-id",
+      "case-review-flags",
       "editor-panel",
       "discussion-panel",
       "discussion-empty",
@@ -1291,6 +1314,7 @@
 
       els["discussion-panel"].classList.add("hidden");
       renderRosterOptions();
+      renderCaseReviewFlags();
       loadFormFrame();
       setRightTab(localStorage.getItem(RIGHT_TAB_KEY) === "form" ? "form" : "preview");
       const article = currentArticle();
@@ -1356,6 +1380,7 @@
             showMessage(message, "ok");
             if (currentMode === "annotation") {
               loadRosterRows();
+              loadResponseHeaders();
             } else {
               loadDiscussionCases();
             }
@@ -1409,6 +1434,17 @@
         showMessage(`Loaded ${rosterRows.length} article roster row(s).`, "ok");
       } catch (error) {
         showMessage(error.message, "error");
+      }
+    }
+
+    async function loadResponseHeaders() {
+      try {
+        requireToken();
+        const data = await sheetsFetch(`/values/${encodeURIComponent(`${quoteSheet(RESPONSE_TAB_NAME)}!A1:ZZ1`)}`);
+        parseResponseHeaders(data.values || []);
+        renderCaseReviewFlags();
+      } catch (error) {
+        renderCaseReviewEmpty(error.message);
       }
     }
 
@@ -1499,6 +1535,20 @@
         discussionResponsesByCaseId.set(normalizeCaseId(row.caseId), row);
       });
       return responses.filter((row) => !isBrianaCaseId(row.caseId));
+    }
+
+    function parseResponseHeaders(rows) {
+      if (!rows.length) {
+        discussionHeaders = [];
+        discussionAttributeStartIndex = -1;
+        return;
+      }
+      discussionHeaders = rows[0].map((header) => String(header || "").trim());
+      const headers = discussionHeaders.map(normalizeHeader);
+      discussionAttributeStartIndex = findHeaderIndex(headers, ["year_drowning_occurred"]);
+      if (discussionAttributeStartIndex === -1) {
+        throw new Error(`${RESPONSE_TAB_NAME} is missing a Year drowning occurred column.`);
+      }
     }
 
     function parseRosterRows(rows) {
@@ -2252,6 +2302,24 @@
         `<option value="${escapeHtml(attribute)}">${escapeHtml(attribute)}</option>`
       )).join("");
       return attributes.length > 0;
+    }
+
+    function renderCaseReviewFlags() {
+      const attributes = discussionHeaders.slice(Math.max(discussionAttributeStartIndex, 0));
+      if (!attributes.length) {
+        renderCaseReviewEmpty("Sign in to load flag attributes.");
+        return;
+      }
+      els["case-review-flags"].innerHTML = attributes.map((attribute) => (
+        `<label class="case-flag">
+          <input type="checkbox" data-attribute="${escapeHtml(attribute)}" disabled>
+          <span>${escapeHtml(attribute)}</span>
+        </label>`
+      )).join("");
+    }
+
+    function renderCaseReviewEmpty(message) {
+      els["case-review-flags"].innerHTML = `<div class="case-review-empty">${escapeHtml(message)}</div>`;
     }
 
     function showDiscussionRightPlaceholder() {
