@@ -732,7 +732,7 @@
       height: 100%;
       min-height: 0;
       display: grid;
-      grid-template-rows: auto auto auto minmax(0, 1fr);
+      grid-template-rows: auto auto minmax(0, 1fr);
       gap: 10px;
       border: 1px solid var(--line);
       border-radius: 8px;
@@ -756,7 +756,7 @@
       grid-template-columns: minmax(0, 1fr) auto;
       align-items: end;
       gap: 6px;
-      min-height: 58px;
+      min-height: 42px;
     }
 
     .case-picker button {
@@ -1092,13 +1092,10 @@
             <div class="case-review-header">
               <span>Case Review</span>
             </div>
-            <label>
-              Case ID
-              <input id="case-review-case-id" autocomplete="off" placeholder="A013-C01">
-            </label>
+            <input id="case-review-case-id" type="hidden" autocomplete="off">
             <div class="case-picker" aria-label="Case selector">
               <label>
-                Existing cases
+                Case
                 <select id="case-review-case-select"></select>
               </label>
               <button id="case-review-add-case" type="button" title="Use next case ID">+C</button>
