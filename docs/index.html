@@ -1138,6 +1138,7 @@
       "preview-frame-wrap",
       "preview-frame",
       "form-frame",
+      "case-review-case-id",
       "editor-panel",
       "discussion-panel",
       "discussion-empty",
@@ -1645,6 +1646,7 @@
     function showAnnotationEditor(article) {
       const title = article.title || article.id || "Article";
       const link = article.link || "";
+      els["case-review-case-id"].value = defaultCaseIdForArticle(article);
       els["article-frame"].removeAttribute("srcdoc");
       els["article-frame"].src = "about:blank";
       els["article-frame-title"].textContent = title;
@@ -1663,6 +1665,11 @@
         els["article-open-link"].setAttribute("aria-disabled", "true");
         els["preview-frame"].src = "about:blank";
       }
+    }
+
+    function defaultCaseIdForArticle(article) {
+      const articleId = normalizeArticleId(article && article.id);
+      return articleId ? `${articleId}-C01` : "";
     }
 
     function loadArticleFrame(link, title, openExternal = false, articleId = "") {
@@ -1907,6 +1914,7 @@
     }
 
     function showArticlePlaceholder() {
+      els["case-review-case-id"].value = "";
       els["article-frame-title"].textContent = "Select an article from the roster";
       els["article-frame-title"].title = "";
       els["article-frame-link"].textContent = "";
@@ -1931,6 +1939,7 @@
     }
 
     function showDiscussionPlaceholder() {
+      els["case-review-case-id"].value = "";
       els["article-frame-title"].textContent = "Discussion mode";
       els["article-frame-title"].title = "Discussion mode";
       els["article-frame-link"].textContent = "";
