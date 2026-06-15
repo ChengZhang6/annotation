@@ -662,6 +662,7 @@
     }
 
     .editor-panel {
+      position: relative;
       min-height: 0;
       display: grid;
       grid-template-rows: minmax(0, 1fr);
@@ -673,6 +674,7 @@
       resize: none;
       border-color: var(--line);
       padding-top: 42px;
+      padding-bottom: 46px;
       line-height: 1.55;
     }
 
@@ -1030,6 +1032,11 @@
           </div>
           <div id="editor-panel" class="tab-panel editor-panel hidden">
             <textarea id="clean-text-editor" class="editor-textarea" autocomplete="off" spellcheck="true" placeholder="Paste and edit clean text here"></textarea>
+            <div class="zoom-controls" aria-label="Editor zoom">
+              <button id="editor-zoom-out" type="button" aria-label="Zoom editor out">-</button>
+              <button id="editor-zoom-reset" class="zoom-readout" type="button" aria-label="Reset editor zoom">100%</button>
+              <button id="editor-zoom-in" type="button" aria-label="Zoom editor in">+</button>
+            </div>
           </div>
         </div>
         <button id="pane-divider" class="pane-divider" type="button" aria-label="Resize panes" title="Drag to resize panes"></button>
@@ -1142,7 +1149,7 @@
     let currentDiscussionDiffs = [];
     let currentDiscussionDiffIndex = 0;
     let messageTimer = 0;
-    let zoomState = { article: 1, right: 1 };
+    let zoomState = { article: 1, right: 1, editor: 1 };
     let currentMode = "annotation";
     let previewFitEnabled = true;
 
@@ -1202,6 +1209,9 @@
       "discussion-note",
       "discussion-save",
       "clean-text-editor",
+      "editor-zoom-out",
+      "editor-zoom-reset",
+      "editor-zoom-in",
       "right-zoom-out",
       "right-zoom-reset",
       "right-zoom-in"
@@ -1243,6 +1253,9 @@
       els["article-zoom-out"].addEventListener("click", () => changePaneZoom("article", -0.1));
       els["article-zoom-in"].addEventListener("click", () => changePaneZoom("article", 0.1));
       els["article-zoom-reset"].addEventListener("click", () => setPaneZoom("article", 1));
+      els["editor-zoom-out"].addEventListener("click", () => changePaneZoom("editor", -0.1));
+      els["editor-zoom-in"].addEventListener("click", () => changePaneZoom("editor", 0.1));
+      els["editor-zoom-reset"].addEventListener("click", () => setPaneZoom("editor", 1));
       els["right-zoom-out"].addEventListener("click", () => changePaneZoom("right", -0.1));
       els["right-zoom-in"].addEventListener("click", () => changePaneZoom("right", 0.1));
       els["right-zoom-reset"].addEventListener("click", () => setPaneZoom("right", 1));
@@ -1908,11 +1921,13 @@
         const cached = JSON.parse(localStorage.getItem(ZOOM_CACHE_KEY) || "{}");
         zoomState.article = sanitizeZoom(cached.article, 1);
         zoomState.right = sanitizeZoom(cached.right, 1);
+        zoomState.editor = sanitizeZoom(cached.editor, 1);
       } catch {
-        zoomState = { article: 1, right: 1 };
+        zoomState = { article: 1, right: 1, editor: 1 };
       }
       applyPaneZoom("article");
       applyPaneZoom("right");
+      applyPaneZoom("editor");
     }
 
     function changePaneZoom(pane, delta) {
@@ -1927,6 +1942,11 @@
 
     function applyPaneZoom(pane) {
       const zoom = zoomState[pane];
+      if (pane === "editor") {
+        els["clean-text-editor"].style.fontSize = `${zoom}em`;
+        els["editor-zoom-reset"].textContent = `${Math.round(zoom * 100)}%`;
+        return;
+      }
       const targets = pane === "article"
         ? [els["article-frame"]]
         : [els["preview-frame"], els["form-frame"], els["discussion-panel"]];
