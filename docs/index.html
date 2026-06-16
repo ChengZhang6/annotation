@@ -528,7 +528,7 @@
       right: auto;
       bottom: 8px;
       left: 8px;
-      width: min(720px, calc(100% - 118px));
+      width: auto;
       gap: 5px;
       padding: 0;
     }
@@ -546,6 +546,10 @@
       background: rgba(255, 255, 255, 0.92);
       box-shadow: 0 4px 12px rgba(32, 35, 39, 0.12);
       backdrop-filter: blur(8px);
+    }
+
+    .article-toolbar .article-meta {
+      display: none;
     }
 
     .pane-tabs {
@@ -1019,6 +1023,7 @@
             </div>
             <div class="viewer-actions">
               <button id="article-refresh" class="link-button" type="button">Refresh article</button>
+              <button id="article-copy-link" class="link-button" type="button">Copy link</button>
               <a id="article-open-link" href="#" target="_blank" rel="noreferrer">Open article</a>
             </div>
           </div>
@@ -1173,6 +1178,7 @@
       "article-frame-title",
       "article-frame-link",
       "article-refresh",
+      "article-copy-link",
       "article-open-link",
       "article-frame-wrap",
       "article-frame",
@@ -1242,6 +1248,7 @@
       els["nav-prev"].addEventListener("click", () => moveCurrentModeItem(-1));
       els["nav-next"].addEventListener("click", () => moveCurrentModeItem(1));
       els["article-refresh"].addEventListener("click", refreshArticleFrame);
+      els["article-copy-link"].addEventListener("click", copyCurrentArticleLink);
       els["tab-preview"].addEventListener("click", () => setRightTab("preview"));
       els["tab-form"].addEventListener("click", () => setRightTab("form"));
       els["preview-fit"].addEventListener("click", () => setPreviewFit(!previewFitEnabled));
@@ -1750,6 +1757,7 @@
       els["article-frame-link"].textContent = link;
       els["article-frame-link"].title = link;
       if (link) {
+        els["article-copy-link"].disabled = false;
         els["article-open-link"].href = link;
         els["article-open-link"].setAttribute("aria-disabled", "false");
         els["preview-frame"].src = link;
@@ -1757,6 +1765,7 @@
           setRightTab("preview");
         }
       } else {
+        els["article-copy-link"].disabled = true;
         els["article-open-link"].removeAttribute("href");
         els["article-open-link"].setAttribute("aria-disabled", "true");
         els["preview-frame"].src = "about:blank";
@@ -1778,6 +1787,7 @@
       els["article-frame-title"].title = title || articleId || "Article";
       els["article-frame-link"].textContent = link;
       els["article-frame-link"].title = link;
+      els["article-copy-link"].disabled = false;
       els["article-open-link"].href = link;
       els["article-open-link"].setAttribute("aria-disabled", "false");
       els["article-frame"].src = link;
@@ -1796,6 +1806,42 @@
       els["preview-frame"].src = withCacheBust(article.link);
       setRightTab("preview");
       showMessage(`Refreshing: ${article.id || article.title || "article"}`, "ok");
+    }
+
+    async function copyCurrentArticleLink() {
+      const article = currentArticle();
+      const link = currentMode === "annotation" && article && article.link
+        ? article.link
+        : els["article-open-link"].getAttribute("href");
+      if (!link || link === "#") {
+        showMessage("No article link to copy.", "warn");
+        return;
+      }
+      try {
+        await copyText(link);
+        showMessage("Article link copied.", "ok");
+      } catch (error) {
+        showMessage(error.message, "error");
+      }
+    }
+
+    async function copyText(text) {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        return;
+      }
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.setAttribute("readonly", "");
+      textarea.style.position = "fixed";
+      textarea.style.left = "-9999px";
+      document.body.appendChild(textarea);
+      textarea.select();
+      const copied = document.execCommand("copy");
+      textarea.remove();
+      if (!copied) {
+        throw new Error("Could not copy article link.");
+      }
     }
 
     function restoreRosterCache() {
@@ -2022,6 +2068,7 @@
       els["article-frame-title"].title = "";
       els["article-frame-link"].textContent = "";
       els["article-frame-link"].title = "";
+      els["article-copy-link"].disabled = true;
       els["article-open-link"].removeAttribute("href");
       els["article-open-link"].setAttribute("aria-disabled", "true");
       els["preview-frame"].src = "about:blank";
@@ -2047,6 +2094,7 @@
       els["article-frame-title"].title = "Discussion mode";
       els["article-frame-link"].textContent = "";
       els["article-frame-link"].title = "";
+      els["article-copy-link"].disabled = true;
       els["article-open-link"].removeAttribute("href");
       els["article-open-link"].setAttribute("aria-disabled", "true");
       els["preview-frame"].src = "about:blank";
@@ -2072,6 +2120,7 @@
       els["article-frame-title"].title = title;
       els["article-frame-link"].textContent = discussionCase.caseId || "";
       els["article-frame-link"].title = discussionCase.caseId || "";
+      els["article-copy-link"].disabled = !discussionCase.link;
       els["article-open-link"].href = discussionCase.link || "#";
       els["article-open-link"].setAttribute("aria-disabled", String(!discussionCase.link));
       els["article-frame"].src = "about:blank";
@@ -2097,6 +2146,7 @@
       els["article-frame-title"].title = title;
       els["article-frame-link"].textContent = discussionCase.caseId || "";
       els["article-frame-link"].title = discussionCase.caseId || "";
+      els["article-copy-link"].disabled = !discussionCase.link;
       els["article-open-link"].href = discussionCase.link || "#";
       els["article-open-link"].setAttribute("aria-disabled", String(!discussionCase.link));
       els["article-frame"].src = "about:blank";
