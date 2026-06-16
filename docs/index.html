@@ -1023,6 +1023,7 @@
             </div>
             <div class="viewer-actions">
               <button id="article-refresh" class="link-button" type="button">Refresh article</button>
+              <button id="case-copy-id" class="link-button" type="button">Copy caseID</button>
               <button id="article-copy-link" class="link-button" type="button">Copy link</button>
               <a id="article-open-link" href="#" target="_blank" rel="noreferrer">Open article</a>
             </div>
@@ -1178,6 +1179,7 @@
       "article-frame-title",
       "article-frame-link",
       "article-refresh",
+      "case-copy-id",
       "article-copy-link",
       "article-open-link",
       "article-frame-wrap",
@@ -1248,6 +1250,7 @@
       els["nav-prev"].addEventListener("click", () => moveCurrentModeItem(-1));
       els["nav-next"].addEventListener("click", () => moveCurrentModeItem(1));
       els["article-refresh"].addEventListener("click", refreshArticleFrame);
+      els["case-copy-id"].addEventListener("click", copyCurrentCaseId);
       els["article-copy-link"].addEventListener("click", copyCurrentArticleLink);
       els["tab-preview"].addEventListener("click", () => setRightTab("preview"));
       els["tab-form"].addEventListener("click", () => setRightTab("form"));
@@ -1820,6 +1823,20 @@
       try {
         await copyText(link);
         showMessage("Article link copied.", "ok");
+      } catch (error) {
+        showMessage(error.message, "error");
+      }
+    }
+
+    async function copyCurrentCaseId() {
+      const caseId = currentCaseReviewCaseId();
+      if (!caseId) {
+        showMessage("No case ID to copy.", "warn");
+        return;
+      }
+      try {
+        await copyText(caseId);
+        showMessage("Case ID copied.", "ok");
       } catch (error) {
         showMessage(error.message, "error");
       }
