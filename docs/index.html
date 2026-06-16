@@ -1142,6 +1142,28 @@
     const PREVIEW_FIT_CROP_X = 72;
     const PREVIEW_FIT_CROP_Y = 36;
     const SCOPE = "https://www.googleapis.com/auth/spreadsheets";
+    const NON_REVIEW_HEADERS = new Set([
+      "timestamp",
+      "articleid",
+      "article_id",
+      "uuid",
+      "caseid",
+      "case_id",
+      "article_title",
+      "title",
+      "articletitle",
+      "drop_in_article_text",
+      "clean_text",
+      "article_text",
+      "link_to_article",
+      "article_link",
+      "link",
+      "url",
+      "edit_response_url",
+      "edit_response_link",
+      "link_to_edit_response",
+      "link_to_edit_reponse"
+    ]);
     let accessToken = "";
     let tokenClient = null;
     let authRequestMode = "manual";
@@ -2225,8 +2247,7 @@
 
     function buildDiscussionDiffs(chengCase, brianaCase) {
       const diffs = [];
-      for (let index = discussionAttributeStartIndex; index < discussionHeaders.length; index += 1) {
-        const attribute = discussionHeaders[index] || `Column ${index + 1}`;
+      for (const { index, attribute } of reviewAttributeEntries()) {
         const chengAnswer = cellValue(chengCase.values, index);
         const brianaAnswer = cellValue(brianaCase.values, index);
         if (chengAnswer !== brianaAnswer) {
@@ -2417,15 +2438,34 @@
       });
     }
 
+    function reviewAttributeEntries() {
+      if (discussionAttributeStartIndex < 0) {
+        return [];
+      }
+      return discussionHeaders
+        .map((attribute, index) => ({ index, attribute: attribute || `Column ${index + 1}` }))
+        .slice(discussionAttributeStartIndex)
+        .filter(({ attribute }) => isReviewAttribute(attribute));
+    }
+
+    function reviewAttributes() {
+      return reviewAttributeEntries().map(({ attribute }) => attribute);
+    }
+
+    function isReviewAttribute(attribute) {
+      const normalized = normalizeHeader(attribute);
+      return Boolean(normalized && !NON_REVIEW_HEADERS.has(normalized));
+    }
+
     function desiredDiscussionHeaders() {
       return [
         "caseID",
-        ...discussionHeaders.slice(discussionAttributeStartIndex).map(discussionNoteHeader)
+        ...reviewAttributes().map(discussionNoteHeader)
       ];
     }
 
     function desiredCaseReviewHeaders() {
-      const attributes = discussionHeaders.slice(discussionAttributeStartIndex);
+      const attributes = reviewAttributes();
       return [
         "caseID",
         ...attributes.map(discussionNoteHeader),
@@ -2529,7 +2569,7 @@
           return;
         }
         const checkedAttributes = new Set();
-        discussionHeaders.slice(discussionAttributeStartIndex).forEach((attribute) => {
+        reviewAttributes().forEach((attribute) => {
           const index = headers.indexOf(caseReviewFlagHeader(attribute));
           const value = index >= 0 ? String(existingRow[index] || "").trim().toLowerCase() : "";
           if (value === "yes" || value === "true" || value === "1") {
@@ -2614,7 +2654,7 @@
     }
 
     function renderManualDiscussionAttributes() {
-      const attributes = discussionHeaders.slice(Math.max(discussionAttributeStartIndex, 0));
+      const attributes = reviewAttributes();
       els["manual-attribute-select"].innerHTML = attributes.map((attribute) => (
         `<option value="${escapeHtml(attribute)}">${escapeHtml(attribute)}</option>`
       )).join("");
@@ -2622,7 +2662,7 @@
     }
 
     function renderCaseReviewFlags() {
-      const attributes = discussionHeaders.slice(Math.max(discussionAttributeStartIndex, 0));
+      const attributes = reviewAttributes();
       if (!attributes.length) {
         renderCaseReviewEmpty("Sign in to load flag attributes.");
         return;
