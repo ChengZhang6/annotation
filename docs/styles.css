@@ -788,6 +788,10 @@
       overflow: hidden;
     }
 
+    body[data-mode="discussion"] .discussion-edit-panel.hidden {
+      display: grid !important;
+    }
+
     body:not([data-mode="discussion"]) .discussion-edit-panel {
       display: none;
     }

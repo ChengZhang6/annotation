@@ -1133,6 +1133,7 @@
     function renderDiscussionEditResponse(discussionCase) {
       const editUrl = discussionCase && discussionCase.editUrl ? discussionCase.editUrl : "";
       const caseId = discussionCase && discussionCase.caseId ? discussionCase.caseId : "";
+      els["discussion-edit-panel"].classList.remove("hidden");
       els["discussion-edit-title"].textContent = caseId ? `Edit Response: ${caseId}` : "Edit Response";
       els["discussion-edit-open"].href = editUrl || "#";
       els["discussion-edit-open"].setAttribute("aria-disabled", String(!editUrl));
@@ -1151,6 +1152,7 @@
     }
 
     function showDiscussionEditPlaceholder(message = "Select a discussion case.") {
+      els["discussion-edit-panel"].classList.remove("hidden");
       els["discussion-edit-title"].textContent = "Edit Response";
       els["discussion-edit-open"].href = "#";
       els["discussion-edit-open"].setAttribute("aria-disabled", "true");
