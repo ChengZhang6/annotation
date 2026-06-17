@@ -968,6 +968,17 @@
       font-size: 12px;
     }
 
+    .discussion-actions {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .discussion-actions button {
+      min-height: 38px;
+    }
+
     @media (max-width: 860px) {
       .topbar,
       .shell {

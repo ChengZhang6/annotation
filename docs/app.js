@@ -121,6 +121,7 @@
       "briana-answer",
       "discussion-note",
       "discussion-save",
+      "discussion-resolve-flag",
       "clean-text-editor",
       "editor-zoom-out",
       "editor-zoom-reset",
@@ -178,6 +179,7 @@
       els["diff-next"].addEventListener("click", () => moveDiscussionDiff(1));
       els["discussion-filter-bar"].addEventListener("click", handleDiscussionFilterClick);
       els["discussion-save"].addEventListener("click", saveDiscussionNote);
+      els["discussion-resolve-flag"].addEventListener("click", resolveCurrentDiscussionFlag);
       els["manual-discussion-save"].addEventListener("click", saveManualDiscussionNote);
       els["pane-divider"].addEventListener("pointerdown", startPaneResize);
       els["pane-divider"].addEventListener("dblclick", () => setPaneSplit(defaultPaneSplit()));
@@ -1180,6 +1182,8 @@
       els["discussion-note"].placeholder = "Loading saved note...";
       els["discussion-note"].disabled = true;
       els["discussion-save"].disabled = true;
+      els["discussion-resolve-flag"].disabled = !diff.isFlagged;
+      els["discussion-resolve-flag"].classList.toggle("hidden", !diff.isFlagged);
       els["diff-prev"].disabled = currentDiscussionDiffs.length <= 1;
       els["diff-next"].disabled = currentDiscussionDiffs.length <= 1;
       loadCurrentDiscussionNote();
@@ -1276,6 +1280,8 @@
       els["discussion-manual-card"].classList.add("hidden");
       els["discussion-note"].disabled = true;
       els["discussion-save"].disabled = true;
+      els["discussion-resolve-flag"].disabled = true;
+      els["discussion-resolve-flag"].classList.add("hidden");
     }
 
     function moveDiscussionDiff(delta) {
@@ -1303,6 +1309,29 @@
         showMessage(error.message, "error");
       } finally {
         els["discussion-save"].disabled = false;
+      }
+    }
+
+    async function resolveCurrentDiscussionFlag() {
+      const discussionCase = currentDiscussionCase();
+      const diff = currentDiscussionDiffs[currentDiscussionDiffIndex];
+      if (!discussionCase || !diff) {
+        showMessage("Select a discussion item before resolving.", "warn");
+        return;
+      }
+      if (!diff.isFlagged) {
+        showMessage("This item is not flagged.", "warn");
+        return;
+      }
+
+      els["discussion-resolve-flag"].disabled = true;
+      try {
+        await saveCaseReviewFlag(discussionCase.caseId, diff.attribute, false);
+        showMessage(`Resolved flag for ${discussionCase.caseId}: ${diff.attribute}.`, "ok");
+        await renderDiscussionDiffs(discussionCase);
+      } catch (error) {
+        showMessage(error.message, "error");
+        els["discussion-resolve-flag"].disabled = false;
       }
     }
 
@@ -1707,6 +1736,8 @@
       els["manual-discussion-note"].value = "";
       els["discussion-note"].disabled = true;
       els["discussion-save"].disabled = true;
+      els["discussion-resolve-flag"].disabled = true;
+      els["discussion-resolve-flag"].classList.add("hidden");
     }
 
     function renderManualDiscussionAttributes() {
