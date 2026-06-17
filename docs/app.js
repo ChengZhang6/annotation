@@ -10,6 +10,7 @@
     const RIGHT_TAB_KEY = "cdcf-right-tab";
     const ZOOM_CACHE_KEY = "cdcf-pane-zoom";
     const SPLIT_CACHE_KEY_PREFIX = "cdcf-pane-split-v3";
+    const DISCUSSION_SPLIT_CACHE_KEY = "cdcf-pane-split-discussion-v2";
     const MODE_CACHE_KEY = "cdcf-mode";
     const DISCUSSION_FILTER_KEY = "cdcf-discussion-filter";
     const PREVIEW_FIT_KEY = "cdcf-preview-fit";
@@ -100,6 +101,10 @@
       "case-review-case-select",
       "case-review-add-case",
       "case-review-flags",
+      "discussion-edit-panel",
+      "discussion-edit-open",
+      "discussion-edit-empty",
+      "discussion-edit-frame",
       "editor-panel",
       "discussion-panel",
       "discussion-filter-bar",
@@ -431,6 +436,7 @@
         } else {
           showDiscussionPlaceholder();
           showDiscussionRightPlaceholder();
+          showDiscussionEditPlaceholder();
           showDiscussionEmpty("No Cheng discussion cases found.");
         }
         showMessage(`Loaded ${discussionCases.length} Cheng discussion case(s).`, "ok");
@@ -471,6 +477,7 @@
       const titleIndex = findHeaderIndex(headers, ["article_title", "title", "articletitle"]);
       const cleanTextIndex = findHeaderIndex(headers, ["drop_in_article_text", "clean_text", "article_text"]);
       const linkIndex = findHeaderIndex(headers, ["link_to_article", "article_link", "link", "url"]);
+      const editUrlIndex = findHeaderIndex(headers, ["edit_response_url", "edit_response_link", "link_to_edit_response", "link_to_edit_reponse"]);
       discussionAttributeStartIndex = findHeaderIndex(headers, ["year_drowning_occurred"]);
       if (caseIdIndex === -1) {
         throw new Error(`${RESPONSE_TAB_NAME} is missing a caseID column.`);
@@ -487,6 +494,7 @@
           title: cellValue(row, titleIndex),
           cleanText: cellValue(row, cleanTextIndex),
           link: cellValue(row, linkIndex),
+          editUrl: cellValue(row, editUrlIndex),
           values: row
         }))
         .filter((row) => row.caseId);
@@ -616,6 +624,7 @@
       els["article-select"].value = String(boundedIndex);
       els["jump-id"].value = discussionCase.caseId || "";
       showDiscussionCaseContent(discussionCase);
+      renderDiscussionEditResponse(discussionCase);
       renderDiscussionDiffs(discussionCase);
       updateDiscussionPosition();
     }
@@ -950,7 +959,8 @@
     }
 
     function setPaneSplit(percent, persist = true) {
-      const bounded = Math.max(30, Math.min(70, Math.round(percent * 10) / 10));
+      const bounds = paneSplitBounds();
+      const bounded = Math.max(bounds.min, Math.min(bounds.max, Math.round(percent * 10) / 10));
       document.querySelector(".viewer-grid").style.setProperty("--left-pane", `${bounded}%`);
       if (persist) {
         localStorage.setItem(splitCacheKey(), String(bounded));
@@ -958,11 +968,15 @@
     }
 
     function splitCacheKey() {
-      return `${SPLIT_CACHE_KEY_PREFIX}-${currentMode}`;
+      return currentMode === "discussion" ? DISCUSSION_SPLIT_CACHE_KEY : `${SPLIT_CACHE_KEY_PREFIX}-${currentMode}`;
     }
 
     function defaultPaneSplit() {
-      return currentMode === "annotation" ? 34 : 50;
+      return currentMode === "annotation" ? 34 : 34;
+    }
+
+    function paneSplitBounds() {
+      return currentMode === "discussion" ? { min: 25, max: 45 } : { min: 30, max: 70 };
     }
 
     function startPaneResize(event) {
@@ -1113,6 +1127,33 @@
           </body>
         </html>
       `;
+    }
+
+    function renderDiscussionEditResponse(discussionCase) {
+      const editUrl = discussionCase && discussionCase.editUrl ? discussionCase.editUrl : "";
+      els["discussion-edit-open"].href = editUrl || "#";
+      els["discussion-edit-open"].setAttribute("aria-disabled", String(!editUrl));
+
+      if (!editUrl) {
+        els["discussion-edit-frame"].src = "about:blank";
+        els["discussion-edit-frame"].classList.add("hidden");
+        els["discussion-edit-empty"].textContent = "No edit response URL for this case.";
+        els["discussion-edit-empty"].classList.remove("hidden");
+        return;
+      }
+
+      els["discussion-edit-empty"].classList.add("hidden");
+      els["discussion-edit-frame"].classList.remove("hidden");
+      els["discussion-edit-frame"].src = normalizeFormUrl(editUrl);
+    }
+
+    function showDiscussionEditPlaceholder(message = "Select a discussion case.") {
+      els["discussion-edit-open"].href = "#";
+      els["discussion-edit-open"].setAttribute("aria-disabled", "true");
+      els["discussion-edit-frame"].src = "about:blank";
+      els["discussion-edit-frame"].classList.add("hidden");
+      els["discussion-edit-empty"].textContent = message;
+      els["discussion-edit-empty"].classList.remove("hidden");
     }
 
     async function renderDiscussionDiffs(discussionCase) {
@@ -1776,6 +1817,7 @@
       els["editor-panel"].classList.add("hidden");
       els["discussion-panel"].classList.remove("hidden");
       if (!currentDiscussionCase()) {
+        showDiscussionEditPlaceholder();
         showDiscussionEmpty(accessToken ? "Select a discussion case." : "Sign in to load discussion cases.");
       }
     }
