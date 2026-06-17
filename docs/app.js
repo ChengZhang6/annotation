@@ -102,6 +102,7 @@
       "case-review-add-case",
       "case-review-flags",
       "discussion-edit-panel",
+      "discussion-edit-title",
       "discussion-edit-open",
       "discussion-edit-empty",
       "discussion-edit-frame",
@@ -1131,13 +1132,15 @@
 
     function renderDiscussionEditResponse(discussionCase) {
       const editUrl = discussionCase && discussionCase.editUrl ? discussionCase.editUrl : "";
+      const caseId = discussionCase && discussionCase.caseId ? discussionCase.caseId : "";
+      els["discussion-edit-title"].textContent = caseId ? `Edit Response: ${caseId}` : "Edit Response";
       els["discussion-edit-open"].href = editUrl || "#";
       els["discussion-edit-open"].setAttribute("aria-disabled", String(!editUrl));
 
       if (!editUrl) {
         els["discussion-edit-frame"].src = "about:blank";
         els["discussion-edit-frame"].classList.add("hidden");
-        els["discussion-edit-empty"].textContent = "No edit response URL for this case.";
+        els["discussion-edit-empty"].textContent = caseId ? `No edit response URL for ${caseId}.` : "No edit response URL for this case.";
         els["discussion-edit-empty"].classList.remove("hidden");
         return;
       }
@@ -1148,6 +1151,7 @@
     }
 
     function showDiscussionEditPlaceholder(message = "Select a discussion case.") {
+      els["discussion-edit-title"].textContent = "Edit Response";
       els["discussion-edit-open"].href = "#";
       els["discussion-edit-open"].setAttribute("aria-disabled", "true");
       els["discussion-edit-frame"].src = "about:blank";
