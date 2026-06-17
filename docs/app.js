@@ -11,10 +11,12 @@
     const ZOOM_CACHE_KEY = "cdcf-pane-zoom";
     const SPLIT_CACHE_KEY_PREFIX = "cdcf-pane-split-v3";
     const MODE_CACHE_KEY = "cdcf-mode";
+    const DISCUSSION_FILTER_KEY = "cdcf-discussion-filter";
     const PREVIEW_FIT_KEY = "cdcf-preview-fit";
     const PREVIEW_FIT_CROP_X = 72;
     const PREVIEW_FIT_CROP_Y = 36;
     const SCOPE = "https://www.googleapis.com/auth/spreadsheets";
+    const DISCUSSION_FILTERS = ["all", "diff", "flag"];
     const NON_REVIEW_HEADERS = new Set([
       "timestamp",
       "articleid",
@@ -47,8 +49,10 @@
     let currentDiscussionIndex = -1;
     let discussionHeaders = [];
     let discussionAttributeStartIndex = -1;
+    let currentDiscussionItems = [];
     let currentDiscussionDiffs = [];
     let currentDiscussionDiffIndex = 0;
+    let currentDiscussionFilter = normalizeDiscussionFilter(localStorage.getItem(DISCUSSION_FILTER_KEY));
     let discussionNoteRequestId = 0;
     let messageTimer = 0;
     let zoomState = { article: 1, right: 1, editor: 1 };
@@ -98,6 +102,10 @@
       "case-review-flags",
       "editor-panel",
       "discussion-panel",
+      "discussion-filter-bar",
+      "discussion-filter-all",
+      "discussion-filter-diff",
+      "discussion-filter-flag",
       "discussion-empty",
       "discussion-manual-card",
       "manual-attribute-select",
@@ -168,6 +176,7 @@
       els["right-zoom-reset"].addEventListener("click", () => setPaneZoom("right", 1));
       els["diff-prev"].addEventListener("click", () => moveDiscussionDiff(-1));
       els["diff-next"].addEventListener("click", () => moveDiscussionDiff(1));
+      els["discussion-filter-bar"].addEventListener("click", handleDiscussionFilterClick);
       els["discussion-save"].addEventListener("click", saveDiscussionNote);
       els["manual-discussion-save"].addEventListener("click", saveManualDiscussionNote);
       els["pane-divider"].addEventListener("pointerdown", startPaneResize);
@@ -1119,13 +1128,13 @@
         return;
       }
 
-      currentDiscussionDiffs = buildDiscussionReviewItems(discussionCase, brianaCase, flaggedAttributes);
+      currentDiscussionItems = buildDiscussionReviewItems(discussionCase, brianaCase, flaggedAttributes);
       currentDiscussionDiffIndex = 0;
-      if (!currentDiscussionDiffs.length) {
+      if (!currentDiscussionItems.length) {
         showDiscussionEmpty(brianaCase ? "No differences or flagged attributes found." : "No Briana response or flagged attributes for this case.");
         return;
       }
-      renderCurrentDiscussionDiff();
+      applyDiscussionFilter();
     }
 
     function buildDiscussionReviewItems(chengCase, brianaCase, flaggedAttributes) {
@@ -1185,6 +1194,88 @@
         badges.push("Flag");
       }
       return badges.length ? badges : ["Review"];
+    }
+
+    function handleDiscussionFilterClick(event) {
+      const button = event.target.closest("button[data-filter]");
+      if (!button) {
+        return;
+      }
+      setDiscussionFilter(button.dataset.filter);
+    }
+
+    function setDiscussionFilter(filter) {
+      currentDiscussionFilter = normalizeDiscussionFilter(filter);
+      localStorage.setItem(DISCUSSION_FILTER_KEY, currentDiscussionFilter);
+      currentDiscussionDiffIndex = 0;
+      applyDiscussionFilter();
+    }
+
+    function normalizeDiscussionFilter(filter) {
+      return DISCUSSION_FILTERS.includes(filter) ? filter : "all";
+    }
+
+    function applyDiscussionFilter() {
+      renderDiscussionFilterButtons();
+      currentDiscussionDiffs = currentDiscussionItems.filter(matchesDiscussionFilter);
+      if (!currentDiscussionItems.length) {
+        showDiscussionEmpty("No review items found.");
+        return;
+      }
+      if (!currentDiscussionDiffs.length) {
+        showDiscussionFilteredEmpty(`No ${currentDiscussionFilterLabel()} items for this case.`);
+        return;
+      }
+      renderCurrentDiscussionDiff();
+    }
+
+    function matchesDiscussionFilter(item) {
+      if (currentDiscussionFilter === "diff") {
+        return item.hasDiff;
+      }
+      if (currentDiscussionFilter === "flag") {
+        return item.isFlagged;
+      }
+      return true;
+    }
+
+    function currentDiscussionFilterLabel() {
+      if (currentDiscussionFilter === "diff") {
+        return "Diff";
+      }
+      if (currentDiscussionFilter === "flag") {
+        return "Flag";
+      }
+      return "review";
+    }
+
+    function renderDiscussionFilterButtons() {
+      const counts = {
+        all: currentDiscussionItems.length,
+        diff: currentDiscussionItems.filter((item) => item.hasDiff).length,
+        flag: currentDiscussionItems.filter((item) => item.isFlagged).length
+      };
+      els["discussion-filter-bar"].classList.toggle("hidden", !currentDiscussionItems.length);
+      [
+        ["discussion-filter-all", "All", counts.all],
+        ["discussion-filter-diff", "Diff", counts.diff],
+        ["discussion-filter-flag", "Flag", counts.flag]
+      ].forEach(([id, label, count]) => {
+        const button = els[id];
+        const isActive = button.dataset.filter === currentDiscussionFilter;
+        button.textContent = `${label} ${count}`;
+        button.classList.toggle("active", isActive);
+        button.setAttribute("aria-pressed", String(isActive));
+      });
+    }
+
+    function showDiscussionFilteredEmpty(message) {
+      els["discussion-empty"].textContent = message;
+      els["discussion-empty"].classList.remove("hidden");
+      els["discussion-diff-card"].classList.add("hidden");
+      els["discussion-manual-card"].classList.add("hidden");
+      els["discussion-note"].disabled = true;
+      els["discussion-save"].disabled = true;
     }
 
     function moveDiscussionDiff(delta) {
@@ -1605,6 +1696,9 @@
     function showDiscussionEmpty(message) {
       currentDiscussionDiffs = [];
       currentDiscussionDiffIndex = 0;
+      if (!currentDiscussionCase() || !currentDiscussionItems.length) {
+        els["discussion-filter-bar"].classList.add("hidden");
+      }
       els["discussion-empty"].textContent = message;
       els["discussion-empty"].classList.remove("hidden");
       els["discussion-diff-card"].classList.add("hidden");

@@ -707,6 +707,36 @@
       background: #ffffff;
     }
 
+    .discussion-filter-bar {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      margin: 0 0 12px;
+      padding: 3px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.94);
+      box-shadow: 0 4px 12px rgba(32, 35, 39, 0.08);
+    }
+
+    .discussion-filter-bar button {
+      min-height: 24px;
+      border-radius: 6px;
+      padding: 0 9px;
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--muted);
+    }
+
+    .discussion-filter-bar button.active {
+      color: var(--green);
+      border-color: #b8d8cd;
+      background: #ffffff;
+    }
+
     .discussion-empty {
       display: grid;
       place-items: center;
