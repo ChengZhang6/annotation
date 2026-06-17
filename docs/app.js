@@ -49,6 +49,7 @@
     let discussionAttributeStartIndex = -1;
     let currentDiscussionDiffs = [];
     let currentDiscussionDiffIndex = 0;
+    let discussionNoteRequestId = 0;
     let messageTimer = 0;
     let zoomState = { article: 1, right: 1, editor: 1 };
     let currentMode = "annotation";
@@ -1149,10 +1150,12 @@
       els["cheng-answer"].innerHTML = `<strong>Cheng</strong>${escapeHtml(diff.chengAnswer || "(blank)")}`;
       els["briana-answer"].innerHTML = `<strong>Briana</strong>${escapeHtml(diff.brianaAnswer || "(blank)")}`;
       els["discussion-note"].value = "";
-      els["discussion-note"].disabled = false;
-      els["discussion-save"].disabled = false;
+      els["discussion-note"].placeholder = "Loading saved note...";
+      els["discussion-note"].disabled = true;
+      els["discussion-save"].disabled = true;
       els["diff-prev"].disabled = currentDiscussionDiffs.length <= 1;
       els["diff-next"].disabled = currentDiscussionDiffs.length <= 1;
+      loadCurrentDiscussionNote();
     }
 
     function moveDiscussionDiff(delta) {
@@ -1171,15 +1174,11 @@
         showMessage("Select a discussion diff before saving.", "warn");
         return;
       }
-      if (!note) {
-        showMessage("Enter a note before saving.", "warn");
-        return;
-      }
 
       els["discussion-save"].disabled = true;
       try {
         await saveDiscussionAttributeNote(discussionCase.caseId, diff.attribute, note);
-        showMessage(`Saved ${discussionCase.caseId} ${discussionNoteHeader(diff.attribute)}.`, "ok");
+        showMessage(`Saved ${discussionCase.caseId} ${discussionNoteHeader(diff.attribute)} in case_review.`, "ok");
       } catch (error) {
         showMessage(error.message, "error");
       } finally {
@@ -1199,15 +1198,11 @@
         showMessage("Select an attribute before saving.", "warn");
         return;
       }
-      if (!note) {
-        showMessage("Enter a note before saving.", "warn");
-        return;
-      }
 
       els["manual-discussion-save"].disabled = true;
       try {
         await saveDiscussionAttributeNote(discussionCase.caseId, attribute, note);
-        showMessage(`Saved ${discussionCase.caseId} ${discussionNoteHeader(attribute)}.`, "ok");
+        showMessage(`Saved ${discussionCase.caseId} ${discussionNoteHeader(attribute)} in case_review.`, "ok");
       } catch (error) {
         showMessage(error.message, "error");
       } finally {
@@ -1215,26 +1210,71 @@
       }
     }
 
-    async function saveDiscussionAttributeNote(caseId, attribute, note) {
+    async function loadCurrentDiscussionNote() {
+      const requestId = ++discussionNoteRequestId;
+      const discussionCase = currentDiscussionCase();
+      const diff = currentDiscussionDiffs[currentDiscussionDiffIndex];
+      if (!discussionCase || !diff) {
+        return;
+      }
+
+      try {
+        const note = await loadDiscussionAttributeNote(discussionCase.caseId, diff.attribute);
+        const stillCurrent = requestId === discussionNoteRequestId
+          && currentDiscussionCase()
+          && normalizeCaseId(currentDiscussionCase().caseId) === normalizeCaseId(discussionCase.caseId)
+          && currentDiscussionDiffs[currentDiscussionDiffIndex]
+          && currentDiscussionDiffs[currentDiscussionDiffIndex].attribute === diff.attribute;
+        if (stillCurrent) {
+          els["discussion-note"].value = note;
+          els["discussion-note"].placeholder = "Enter discussion note or final decision.";
+          els["discussion-note"].disabled = false;
+          els["discussion-save"].disabled = false;
+        }
+      } catch (error) {
+        els["discussion-note"].placeholder = "Enter discussion note or final decision.";
+        els["discussion-note"].disabled = false;
+        els["discussion-save"].disabled = false;
+        showMessage(error.message, "error");
+      }
+    }
+
+    async function loadDiscussionAttributeNote(caseId, attribute) {
       requireToken();
-      const headers = await ensureDiscussionHeaders();
+      const headers = await ensureCaseReviewHeaders();
       const targetHeader = discussionNoteHeader(attribute);
       const targetColumnIndex = headers.indexOf(targetHeader);
       if (targetColumnIndex === -1) {
-        throw new Error(`Discussion header not found: ${targetHeader}`);
+        return "";
       }
 
-      const rows = await readDiscussionRows();
+      const rows = await readSheetRows(CASE_REVIEW_TAB_NAME);
+      const existingRow = rows.slice(1).find((row) => normalizeCaseId(row[0]) === normalizeCaseId(caseId));
+      return existingRow ? String(existingRow[targetColumnIndex] || "") : "";
+    }
+
+    async function saveDiscussionAttributeNote(caseId, attribute, note) {
+      requireToken();
+      const headers = await ensureCaseReviewHeaders();
+      const targetHeader = discussionNoteHeader(attribute);
+      const targetColumnIndex = headers.indexOf(targetHeader);
+      if (targetColumnIndex === -1) {
+        throw new Error(`Case review header not found: ${targetHeader}`);
+      }
+
+      const rows = await readSheetRows(CASE_REVIEW_TAB_NAME);
       const existingOffset = rows.slice(1).findIndex((row) => normalizeCaseId(row[0]) === normalizeCaseId(caseId));
       const targetRowNumber = existingOffset >= 0 ? existingOffset + 2 : Math.max(rows.length + 1, 2);
       if (existingOffset >= 0) {
         const cell = `${columnName(targetColumnIndex + 1)}${targetRowNumber}`;
-        await updateSheetValues(`${quoteSheet(DISCUSSION_TAB_NAME)}!${cell}`, [[note]]);
+        await updateSheetValues(`${quoteSheet(CASE_REVIEW_TAB_NAME)}!${cell}`, [[note]]);
+      } else if (!note) {
+        return;
       } else {
         const rowValues = Array(targetColumnIndex + 1).fill("");
         rowValues[0] = caseId;
         rowValues[targetColumnIndex] = note;
-        await updateSheetValues(`${quoteSheet(DISCUSSION_TAB_NAME)}!A${targetRowNumber}:${columnName(targetColumnIndex + 1)}${targetRowNumber}`, [rowValues]);
+        await updateSheetValues(`${quoteSheet(CASE_REVIEW_TAB_NAME)}!A${targetRowNumber}:${columnName(targetColumnIndex + 1)}${targetRowNumber}`, [rowValues]);
       }
     }
 
