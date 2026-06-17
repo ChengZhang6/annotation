@@ -108,6 +108,7 @@
       "diff-next",
       "diff-count",
       "diff-attribute",
+      "diff-source",
       "cheng-answer",
       "briana-answer",
       "discussion-note",
@@ -1103,37 +1104,50 @@
       `;
     }
 
-    function renderDiscussionDiffs(discussionCase) {
+    async function renderDiscussionDiffs(discussionCase) {
       const brianaCase = discussionResponsesByCaseId.get(toBrianaCaseId(discussionCase.caseId));
-      if (!brianaCase) {
-        showDiscussionEmpty("No Briana response for this case.");
+      let flaggedAttributes = new Set();
+      try {
+        flaggedAttributes = await loadCaseReviewFlaggedAttributes(discussionCase.caseId);
+      } catch (error) {
+        showMessage(error.message, "error");
+      }
+
+      const stillCurrent = currentDiscussionCase()
+        && normalizeCaseId(currentDiscussionCase().caseId) === normalizeCaseId(discussionCase.caseId);
+      if (!stillCurrent) {
         return;
       }
 
-      currentDiscussionDiffs = buildDiscussionDiffs(discussionCase, brianaCase);
+      currentDiscussionDiffs = buildDiscussionReviewItems(discussionCase, brianaCase, flaggedAttributes);
       currentDiscussionDiffIndex = 0;
       if (!currentDiscussionDiffs.length) {
-        showDiscussionEmpty("No differences found.");
+        showDiscussionEmpty(brianaCase ? "No differences or flagged attributes found." : "No Briana response or flagged attributes for this case.");
         return;
       }
       renderCurrentDiscussionDiff();
     }
 
-    function buildDiscussionDiffs(chengCase, brianaCase) {
-      const diffs = [];
+    function buildDiscussionReviewItems(chengCase, brianaCase, flaggedAttributes) {
+      const items = [];
       for (const { index, attribute } of reviewAttributeEntries()) {
         const chengAnswer = cellValue(chengCase.values, index);
-        const brianaAnswer = cellValue(brianaCase.values, index);
-        if (chengAnswer !== brianaAnswer) {
-          diffs.push({
+        const brianaAnswer = brianaCase ? cellValue(brianaCase.values, index) : "";
+        const hasDiff = Boolean(brianaCase && chengAnswer !== brianaAnswer);
+        const isFlagged = flaggedAttributes.has(attribute);
+        if (hasDiff || isFlagged) {
+          items.push({
             index,
             attribute,
             chengAnswer,
-            brianaAnswer
+            brianaAnswer,
+            hasBriana: Boolean(brianaCase),
+            hasDiff,
+            isFlagged
           });
         }
       }
-      return diffs;
+      return items;
     }
 
     function renderCurrentDiscussionDiff() {
@@ -1147,8 +1161,12 @@
       els["discussion-diff-card"].classList.remove("hidden");
       els["diff-count"].textContent = `${currentDiscussionDiffIndex + 1} / ${currentDiscussionDiffs.length}`;
       els["diff-attribute"].textContent = diff.attribute;
+      els["diff-source"].innerHTML = discussionItemBadges(diff)
+        .map((label) => `<span class="review-badge">${escapeHtml(label)}</span>`)
+        .join("");
       els["cheng-answer"].innerHTML = `<strong>Cheng</strong>${escapeHtml(diff.chengAnswer || "(blank)")}`;
-      els["briana-answer"].innerHTML = `<strong>Briana</strong>${escapeHtml(diff.brianaAnswer || "(blank)")}`;
+      const brianaAnswer = diff.hasBriana ? diff.brianaAnswer || "(blank)" : "(no Briana response)";
+      els["briana-answer"].innerHTML = `<strong>Briana</strong>${escapeHtml(brianaAnswer)}`;
       els["discussion-note"].value = "";
       els["discussion-note"].placeholder = "Loading saved note...";
       els["discussion-note"].disabled = true;
@@ -1156,6 +1174,17 @@
       els["diff-prev"].disabled = currentDiscussionDiffs.length <= 1;
       els["diff-next"].disabled = currentDiscussionDiffs.length <= 1;
       loadCurrentDiscussionNote();
+    }
+
+    function discussionItemBadges(item) {
+      const badges = [];
+      if (item.hasDiff) {
+        badges.push("Diff");
+      }
+      if (item.isFlagged) {
+        badges.push("Flag");
+      }
+      return badges.length ? badges : ["Review"];
     }
 
     function moveDiscussionDiff(delta) {
@@ -1251,6 +1280,26 @@
       const rows = await readSheetRows(CASE_REVIEW_TAB_NAME);
       const existingRow = rows.slice(1).find((row) => normalizeCaseId(row[0]) === normalizeCaseId(caseId));
       return existingRow ? String(existingRow[targetColumnIndex] || "") : "";
+    }
+
+    async function loadCaseReviewFlaggedAttributes(caseId) {
+      requireToken();
+      const headers = await ensureCaseReviewHeaders();
+      const rows = await readSheetRows(CASE_REVIEW_TAB_NAME);
+      const existingRow = rows.slice(1).find((row) => normalizeCaseId(row[0]) === normalizeCaseId(caseId));
+      if (!existingRow) {
+        return new Set();
+      }
+
+      const checkedAttributes = new Set();
+      reviewAttributes().forEach((attribute) => {
+        const index = headers.indexOf(caseReviewFlagHeader(attribute));
+        const value = index >= 0 ? String(existingRow[index] || "").trim().toLowerCase() : "";
+        if (value === "yes" || value === "true" || value === "1") {
+          checkedAttributes.add(attribute);
+        }
+      });
+      return checkedAttributes;
     }
 
     async function saveDiscussionAttributeNote(caseId, attribute, note) {
