@@ -55,6 +55,8 @@
     let currentDiscussionDiffIndex = 0;
     let currentDiscussionFilter = normalizeDiscussionFilter(localStorage.getItem(DISCUSSION_FILTER_KEY));
     let discussionNoteRequestId = 0;
+    let caseReviewNoteRequestId = 0;
+    let selectedCaseReviewAttribute = "";
     let messageTimer = 0;
     let zoomState = { article: 1, right: 1, editor: 1 };
     let currentMode = "annotation";
@@ -101,6 +103,10 @@
       "case-review-case-select",
       "case-review-add-case",
       "case-review-flags",
+      "case-review-note-panel",
+      "case-review-note-attribute",
+      "case-review-note",
+      "case-review-note-save",
       "discussion-edit-panel",
       "discussion-edit-title",
       "discussion-edit-open",
@@ -170,7 +176,9 @@
       els["case-review-case-id"].addEventListener("change", handleCaseReviewCaseInput);
       els["case-review-case-select"].addEventListener("change", handleCaseReviewCaseSelect);
       els["case-review-add-case"].addEventListener("click", addCaseReviewCase);
+      els["case-review-flags"].addEventListener("click", handleCaseReviewAttributeClick);
       els["case-review-flags"].addEventListener("change", handleCaseReviewFlagChange);
+      els["case-review-note-save"].addEventListener("click", saveCaseReviewNote);
       els["clean-text-editor"].addEventListener("input", saveCurrentEditorDraft);
       els["article-zoom-out"].addEventListener("click", () => changePaneZoom("article", -0.1));
       els["article-zoom-in"].addEventListener("click", () => changePaneZoom("article", 0.1));
@@ -1608,6 +1616,7 @@
       }
       await loadCaseReviewCaseOptions(preferredCaseId);
       await loadCaseReviewFlags();
+      loadCaseReviewSelectedNote();
     }
 
     async function loadCaseReviewCaseOptions(preferredCaseId = currentCaseReviewCaseId()) {
@@ -1653,11 +1662,13 @@
       els["case-review-case-id"].value = caseId;
       renderCaseReviewCaseOptions(existingCaseReviewSelectIds(), caseId);
       loadCaseReviewFlags();
+      loadCaseReviewSelectedNote();
     }
 
     function handleCaseReviewCaseSelect() {
       els["case-review-case-id"].value = normalizeCaseId(els["case-review-case-select"].value);
       loadCaseReviewFlags();
+      loadCaseReviewSelectedNote();
     }
 
     function addCaseReviewCase() {
@@ -1671,6 +1682,7 @@
       els["case-review-case-id"].value = nextCaseId;
       renderCaseReviewCaseOptions([...existingCaseReviewSelectIds(), nextCaseId], nextCaseId);
       setCaseReviewCheckboxes(new Set());
+      loadCaseReviewSelectedNote();
       showMessage(`${nextCaseId} ready. First checked flag will create the row.`, "ok");
     }
 
@@ -1715,6 +1727,17 @@
       els["case-review-flags"].querySelectorAll('input[type="checkbox"][data-attribute]').forEach((checkbox) => {
         checkbox.checked = checkedAttributes.has(checkbox.dataset.attribute);
       });
+      updateCaseReviewSelectedAttribute();
+    }
+
+    function handleCaseReviewAttributeClick(event) {
+      const target = event.target instanceof Element
+        ? event.target.closest("[data-attribute]")
+        : null;
+      if (!target || !els["case-review-flags"].contains(target)) {
+        return;
+      }
+      selectCaseReviewAttribute(target.dataset.attribute);
     }
 
     async function handleCaseReviewFlagChange(event) {
@@ -1722,6 +1745,7 @@
       if (!(checkbox instanceof HTMLInputElement) || checkbox.type !== "checkbox" || !checkbox.dataset.attribute) {
         return;
       }
+      selectCaseReviewAttribute(checkbox.dataset.attribute, false);
       const caseId = currentCaseReviewCaseId();
       if (!caseId) {
         checkbox.checked = !checkbox.checked;
@@ -1737,6 +1761,99 @@
       } catch (error) {
         checkbox.checked = !checkbox.checked;
         showMessage(error.message, "error");
+      }
+    }
+
+    function selectCaseReviewAttribute(attribute, shouldLoadNote = true) {
+      if (!reviewAttributes().includes(attribute)) {
+        return;
+      }
+      selectedCaseReviewAttribute = attribute;
+      updateCaseReviewSelectedAttribute();
+      if (shouldLoadNote) {
+        loadCaseReviewSelectedNote();
+      }
+    }
+
+    function updateCaseReviewSelectedAttribute() {
+      const attributes = reviewAttributes();
+      if (!attributes.includes(selectedCaseReviewAttribute)) {
+        selectedCaseReviewAttribute = "";
+      }
+      els["case-review-flags"].querySelectorAll("[data-attribute]").forEach((row) => {
+        row.classList.toggle("active", row.dataset.attribute === selectedCaseReviewAttribute);
+      });
+
+      const caseId = currentCaseReviewCaseId();
+      const hasSelection = Boolean(selectedCaseReviewAttribute);
+      els["case-review-note-attribute"].textContent = hasSelection
+        ? selectedCaseReviewAttribute
+        : "Select an attribute";
+      els["case-review-note"].disabled = !hasSelection || !caseId || !accessToken;
+      els["case-review-note-save"].disabled = !hasSelection || !caseId || !accessToken;
+      if (!hasSelection) {
+        els["case-review-note"].value = "";
+        els["case-review-note"].placeholder = "Click an attribute above to write a note.";
+      } else if (!caseId) {
+        els["case-review-note"].placeholder = "Select or enter a case ID first.";
+      } else if (!accessToken) {
+        els["case-review-note"].placeholder = "Sign in to load and save notes.";
+      } else {
+        els["case-review-note"].placeholder = "Write why this attribute needs review.";
+      }
+    }
+
+    async function loadCaseReviewSelectedNote() {
+      const requestId = ++caseReviewNoteRequestId;
+      const caseId = currentCaseReviewCaseId();
+      const attribute = selectedCaseReviewAttribute;
+      updateCaseReviewSelectedAttribute();
+      if (!attribute || !caseId || !accessToken || currentMode !== "annotation") {
+        return;
+      }
+      els["case-review-note"].value = "";
+      els["case-review-note"].placeholder = "Loading saved note...";
+      try {
+        const note = await loadDiscussionAttributeNote(caseId, attribute);
+        if (requestId !== caseReviewNoteRequestId || attribute !== selectedCaseReviewAttribute || caseId !== currentCaseReviewCaseId()) {
+          return;
+        }
+        els["case-review-note"].value = note;
+        els["case-review-note"].placeholder = "Write why this attribute needs review.";
+      } catch (error) {
+        if (requestId === caseReviewNoteRequestId) {
+          els["case-review-note"].placeholder = "Could not load saved note.";
+          showMessage(error.message, "error");
+        }
+      }
+    }
+
+    async function saveCaseReviewNote() {
+      const caseId = currentCaseReviewCaseId();
+      const attribute = selectedCaseReviewAttribute;
+      if (!caseId || !attribute) {
+        showMessage("Select a case and attribute before saving a note.", "warn");
+        return;
+      }
+      const note = els["case-review-note"].value;
+      try {
+        await saveDiscussionAttributeNote(caseId, attribute, note);
+        if (note.trim()) {
+          await saveCaseReviewFlag(caseId, attribute, true);
+          setCaseReviewCheckbox(attribute, true);
+        }
+        renderCaseReviewCaseOptions([...existingCaseReviewSelectIds(), caseId], caseId);
+        showMessage(`Saved ${caseId}: ${attribute} note.`, "ok");
+      } catch (error) {
+        showMessage(error.message, "error");
+      }
+    }
+
+    function setCaseReviewCheckbox(attribute, checked) {
+      const checkbox = Array.from(els["case-review-flags"].querySelectorAll('input[type="checkbox"][data-attribute]'))
+        .find((input) => input.dataset.attribute === attribute);
+      if (checkbox) {
+        checkbox.checked = checked;
       }
     }
 
@@ -1802,15 +1919,18 @@
         return;
       }
       els["case-review-flags"].innerHTML = attributes.map((attribute) => (
-        `<label class="case-flag">
-          <input type="checkbox" data-attribute="${escapeHtml(attribute)}">
+        `<div class="case-flag" data-attribute="${escapeHtml(attribute)}">
+          <input type="checkbox" data-attribute="${escapeHtml(attribute)}" aria-label="Flag ${escapeHtml(attribute)}">
           <span>${escapeHtml(attribute)}</span>
-        </label>`
+        </div>`
       )).join("");
+      updateCaseReviewSelectedAttribute();
     }
 
     function renderCaseReviewEmpty(message) {
       els["case-review-flags"].innerHTML = `<div class="case-review-empty">${escapeHtml(message)}</div>`;
+      selectedCaseReviewAttribute = "";
+      updateCaseReviewSelectedAttribute();
     }
 
     function showDiscussionRightPlaceholder() {
