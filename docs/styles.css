@@ -424,13 +424,17 @@
       --review-pane: 280px;
       height: 100%;
       display: grid;
-      grid-template-columns: minmax(220px, var(--left-pane)) 14px minmax(0, 1fr) minmax(240px, var(--review-pane));
+      grid-template-columns: minmax(220px, var(--left-pane)) 14px minmax(0, 1fr) 14px minmax(240px, var(--review-pane));
       gap: 0;
     }
 
     body[data-mode="discussion"] .viewer-grid {
       --review-pane: clamp(360px, 32vw, 620px);
       grid-template-columns: minmax(220px, var(--left-pane)) 14px minmax(320px, 1fr) minmax(340px, var(--review-pane));
+    }
+
+    body[data-mode="discussion"] .review-pane-divider {
+      display: none;
     }
 
     .pane-divider {
@@ -1126,6 +1130,11 @@
 
       .viewer-grid {
         grid-template-columns: 1fr;
+      }
+
+      .pane-divider,
+      .review-pane-divider {
+        display: none;
       }
 
       .viewer-pane {

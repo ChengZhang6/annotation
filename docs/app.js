@@ -11,6 +11,7 @@
     const ZOOM_CACHE_KEY = "cdcf-pane-zoom";
     const SPLIT_CACHE_KEY_PREFIX = "cdcf-pane-split-v3";
     const DISCUSSION_SPLIT_CACHE_KEY = "cdcf-pane-split-discussion-v2";
+    const CASE_REVIEW_PANE_CACHE_KEY = "cdcf-case-review-pane-width-v1";
     const MODE_CACHE_KEY = "cdcf-mode";
     const DISCUSSION_FILTER_KEY = "cdcf-discussion-filter";
     const PREVIEW_FIT_KEY = "cdcf-preview-fit";
@@ -91,6 +92,7 @@
       "article-zoom-reset",
       "article-zoom-in",
       "pane-divider",
+      "review-pane-divider",
       "tab-preview",
       "tab-form",
       "preview-fit",
@@ -197,9 +199,12 @@
       els["manual-discussion-save"].addEventListener("click", saveManualDiscussionNote);
       els["pane-divider"].addEventListener("pointerdown", startPaneResize);
       els["pane-divider"].addEventListener("dblclick", () => setPaneSplit(defaultPaneSplit()));
+      els["review-pane-divider"].addEventListener("pointerdown", startReviewPaneResize);
+      els["review-pane-divider"].addEventListener("dblclick", () => setReviewPaneWidth(defaultReviewPaneWidth()));
       restorePreviewFit();
       restorePaneZoom();
       restorePaneSplit();
+      restoreReviewPaneWidth();
       showArticlePlaceholder();
       loadFormFrame();
       setRightTab(localStorage.getItem(RIGHT_TAB_KEY) === "form" ? "form" : "preview");
@@ -262,6 +267,7 @@
       currentMode = nextMode;
       document.body.dataset.mode = nextMode;
       restorePaneSplit();
+      restoreReviewPaneWidth();
       const useDiscussion = nextMode === "discussion";
       els["mode-annotation"].classList.toggle("active", !useDiscussion);
       els["mode-discussion"].classList.toggle("active", useDiscussion);
@@ -1001,6 +1007,65 @@
       };
       const stop = () => {
         els["pane-divider"].classList.remove("dragging");
+        document.body.classList.remove("resizing-panes");
+        window.removeEventListener("pointermove", update);
+        window.removeEventListener("pointerup", stop);
+      };
+      window.addEventListener("pointermove", update);
+      window.addEventListener("pointerup", stop);
+      update(event);
+    }
+
+    function restoreReviewPaneWidth() {
+      if (currentMode !== "annotation") {
+        return;
+      }
+      const cached = Number(localStorage.getItem(CASE_REVIEW_PANE_CACHE_KEY));
+      setReviewPaneWidth(Number.isFinite(cached) ? cached : defaultReviewPaneWidth(), false);
+    }
+
+    function defaultReviewPaneWidth() {
+      return 280;
+    }
+
+    function reviewPaneWidthBounds() {
+      const grid = document.querySelector(".viewer-grid");
+      const rect = grid.getBoundingClientRect();
+      const maxFromViewport = Math.round(rect.width * 0.42);
+      return {
+        min: 240,
+        max: Math.max(280, Math.min(620, maxFromViewport))
+      };
+    }
+
+    function setReviewPaneWidth(width, persist = true) {
+      if (currentMode !== "annotation") {
+        return;
+      }
+      const bounds = reviewPaneWidthBounds();
+      const bounded = Math.max(bounds.min, Math.min(bounds.max, Math.round(Number(width) || defaultReviewPaneWidth())));
+      document.querySelector(".viewer-grid").style.setProperty("--review-pane", `${bounded}px`);
+      if (persist) {
+        localStorage.setItem(CASE_REVIEW_PANE_CACHE_KEY, String(bounded));
+      }
+    }
+
+    function startReviewPaneResize(event) {
+      if (currentMode !== "annotation") {
+        return;
+      }
+      event.preventDefault();
+      els["review-pane-divider"].classList.add("dragging");
+      document.body.classList.add("resizing-panes");
+      const grid = document.querySelector(".viewer-grid");
+      const rect = grid.getBoundingClientRect();
+      const update = (moveEvent) => {
+        const dividerOffset = els["review-pane-divider"].offsetWidth / 2;
+        const width = rect.right - moveEvent.clientX - dividerOffset;
+        setReviewPaneWidth(width);
+      };
+      const stop = () => {
+        els["review-pane-divider"].classList.remove("dragging");
         document.body.classList.remove("resizing-panes");
         window.removeEventListener("pointermove", update);
         window.removeEventListener("pointerup", stop);
