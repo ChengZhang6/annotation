@@ -12,6 +12,7 @@
     const SPLIT_CACHE_KEY_PREFIX = "cdcf-pane-split-v3";
     const DISCUSSION_SPLIT_CACHE_KEY = "cdcf-pane-split-discussion-v2";
     const CASE_REVIEW_PANE_CACHE_KEY = "cdcf-case-review-pane-width-v1";
+    const DISCUSSION_EDIT_PANE_CACHE_KEY = "cdcf-discussion-edit-pane-width-v1";
     const MODE_CACHE_KEY = "cdcf-mode";
     const DISCUSSION_FILTER_KEY = "cdcf-discussion-filter";
     const PREVIEW_FIT_KEY = "cdcf-preview-fit";
@@ -1017,43 +1018,44 @@
     }
 
     function restoreReviewPaneWidth() {
-      if (currentMode !== "annotation") {
-        return;
-      }
-      const cached = Number(localStorage.getItem(CASE_REVIEW_PANE_CACHE_KEY));
+      const cached = Number(localStorage.getItem(reviewPaneCacheKey()));
       setReviewPaneWidth(Number.isFinite(cached) ? cached : defaultReviewPaneWidth(), false);
     }
 
     function defaultReviewPaneWidth() {
+      if (currentMode === "discussion") {
+        return Math.max(360, Math.min(620, Math.round(window.innerWidth * 0.32)));
+      }
       return 280;
+    }
+
+    function reviewPaneCacheKey() {
+      return currentMode === "discussion" ? DISCUSSION_EDIT_PANE_CACHE_KEY : CASE_REVIEW_PANE_CACHE_KEY;
     }
 
     function reviewPaneWidthBounds() {
       const grid = document.querySelector(".viewer-grid");
       const rect = grid.getBoundingClientRect();
-      const maxFromViewport = Math.round(rect.width * 0.42);
+      const maxFromViewport = Math.round(rect.width * (currentMode === "discussion" ? 0.46 : 0.42));
+      const min = currentMode === "discussion" ? 340 : 240;
+      const hardMax = currentMode === "discussion" ? 820 : 620;
+      const minMax = currentMode === "discussion" ? 420 : 280;
       return {
-        min: 240,
-        max: Math.max(280, Math.min(620, maxFromViewport))
+        min,
+        max: Math.max(minMax, Math.min(hardMax, maxFromViewport))
       };
     }
 
     function setReviewPaneWidth(width, persist = true) {
-      if (currentMode !== "annotation") {
-        return;
-      }
       const bounds = reviewPaneWidthBounds();
       const bounded = Math.max(bounds.min, Math.min(bounds.max, Math.round(Number(width) || defaultReviewPaneWidth())));
       document.querySelector(".viewer-grid").style.setProperty("--review-pane", `${bounded}px`);
       if (persist) {
-        localStorage.setItem(CASE_REVIEW_PANE_CACHE_KEY, String(bounded));
+        localStorage.setItem(reviewPaneCacheKey(), String(bounded));
       }
     }
 
     function startReviewPaneResize(event) {
-      if (currentMode !== "annotation") {
-        return;
-      }
       event.preventDefault();
       els["review-pane-divider"].classList.add("dragging");
       document.body.classList.add("resizing-panes");

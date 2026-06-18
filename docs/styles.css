@@ -430,11 +430,7 @@
 
     body[data-mode="discussion"] .viewer-grid {
       --review-pane: clamp(360px, 32vw, 620px);
-      grid-template-columns: minmax(220px, var(--left-pane)) 14px minmax(320px, 1fr) minmax(340px, var(--review-pane));
-    }
-
-    body[data-mode="discussion"] .review-pane-divider {
-      display: none;
+      grid-template-columns: minmax(220px, var(--left-pane)) 14px minmax(320px, 1fr) 14px minmax(340px, var(--review-pane));
     }
 
     .pane-divider {
